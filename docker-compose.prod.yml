@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: rental_manager
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - rental-network
+
+  app-blue:
+    image: rental-system:latest
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/rental_manager
+      NODE_ENV: production
+      INSTANCE: blue
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - rental-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  app-green:
+    image: rental-system:latest
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/rental_manager
+      NODE_ENV: production
+      INSTANCE: green
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - rental-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app-blue
+      - app-green
+    restart: unless-stopped
+    networks:
+      - rental-network
+
+volumes:
+  postgres_data:
+
+networks:
+  rental-network:
+    driver: bridge

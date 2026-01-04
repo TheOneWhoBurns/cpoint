@@ -1,0 +1,54 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Build Docker image
+        run: docker build -t rental-system:${{ github.sha }} .
+
+      - name: Deploy to production (blue-green)
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H $DEPLOY_HOST >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST \
+            "cd /opt/rental-system && \
+             docker build -t rental-system:${{ github.sha }} . && \
+             docker-compose -f docker-compose.prod.yml up -d --no-deps --build app-green && \
+             sleep 10 && \
+             curl -f http://localhost:3001/health || exit 1 && \
+             docker-compose -f docker-compose.prod.yml up -d --no-deps app-blue && \
+             docker-compose -f docker-compose.prod.yml logs app-blue"
+
+      - name: Notify deployment
+        if: success()
+        run: echo "Deployment successful to production"
+
+      - name: Notify failure
+        if: failure()
+        run: echo "Deployment failed - rollback may be needed"

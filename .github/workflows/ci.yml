@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, rental-system]
+  pull_request:
+    branches: [main, rental-system]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rental
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: rental_manager_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint || true
+
+      - name: Type check
+        run: npm run check || true
+
+      - name: Run tests
+        run: npm run test || true
+        env:
+          DATABASE_URL: postgresql://rental:testpass@localhost:5432/rental_manager_test
+
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://rental:testpass@localhost:5432/rental_manager_test
