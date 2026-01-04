@@ -79,163 +79,184 @@ Simple shift-based tracking (no real auth):
 |-------|------------|---------------|
 | **Runtime** | Node.js 20 LTS | Stable, well-supported |
 | **Framework** | SvelteKit | Full-stack, simple reactivity, small bundles |
-| **Database** | **TBD - SEE DISCUSSION BELOW** | |
+| **Database** | PostgreSQL + JSONB | Hybrid flexibility, Odoo-compatible |
+| **ORM** | Drizzle ORM | Type-safe, SQL-like, lightweight |
 | **Styling** | Tailwind CSS | Utility-first, great for responsive layouts |
 | **Real-time** | Server-Sent Events (SSE) | Simple one-way updates for dashboard |
-| **Deployment** | PM2 + Nginx | Process management, reverse proxy, SSL |
+| **Deployment** | Docker Compose + Nginx | PostgreSQL + app containers, reverse proxy |
 
 ---
 
-## DATABASE APPROACH - DISCUSSION NEEDED
+## Database Design: PostgreSQL + JSONB Hybrid
 
-### The Problem
+### Why PostgreSQL?
 
-You raised valid concerns about relational databases:
-- Schema changes require migrations
-- Adding new product types = alter tables
-- New pricing models = schema changes
-- Rigid structure fights against "rapid and unexpected changes"
+1. **Odoo Integration** - Odoo runs on PostgreSQL natively, making future integration cleaner
+2. **JSONB Excellence** - Best-in-class JSON handling with indexing support
+3. **Hybrid Approach** - Structured where it matters, flexible where needed
+4. **Industry Standard** - Skills transfer, great docs, battle-tested
 
-### Option A: SQLite with JSON Columns (Hybrid)
-
-Keep SQLite but use JSON for flexible parts:
+### Design Philosophy
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  STRUCTURED (relational)     │  FLEXIBLE (JSON blobs)      │
-├──────────────────────────────┼─────────────────────────────│
-│  - Rental ID, timestamps     │  - Product attributes       │
-│  - Operator/shift refs       │  - Pricing rules            │
-│  - Foreign keys              │  - Customer fields          │
-│  - Core status fields        │  - Custom metadata          │
+│  STRUCTURED COLUMNS          │  JSONB COLUMNS              │
+│  (migrations when changed)   │  (no migrations needed)     │
+├──────────────────────────────┼─────────────────────────────┤
+│  • IDs (primary/foreign)     │  • customer info            │
+│  • timestamps                │  • rental line items        │
+│  • status fields             │  • pricing details          │
+│  • operator/shift refs       │  • product attributes       │
+│  • core business fields      │  • custom metadata          │
 └──────────────────────────────┴─────────────────────────────┘
 ```
 
-**Pros:**
-- Single file, zero config (SQLite simplicity)
-- Can query JSON fields with SQLite JSON functions
-- Flexible where needed, structured where it matters
-- Easy backups
-
-**Cons:**
-- JSON queries are slower than indexed columns
-- Less type safety on flexible parts
-- Mixed paradigm can be confusing
-
-### Option B: Document Database (MongoDB/LiteDB)
-
-Full document-based approach:
-
-```javascript
-// Each rental is a self-contained document
-{
-  _id: "rental_abc123",
-  created_at: "2026-01-04T10:30:00Z",
-  operator: { id: "op_1", name: "Maria" },
-  customer: { name: "John", phone: "555-1234" },
-  items: [
-    { type: "tracked", code: "MASK-003", name: "Snorkel Mask", rate: 15 },
-    { type: "generic", name: "Fins", quantity: 1, rate: 5 }
-  ],
-  pricing: { type: "hourly", rate_total: 20 },
-  status: "active",
-  // ... any other fields you want
-}
-```
-
-**Pros:**
-- Maximum flexibility - add any field anytime
-- No migrations ever
-- Natural fit for "mixed rental" model
-- Self-contained documents
-
-**Cons:**
-- MongoDB = external server to manage (complexity)
-- Or use embedded doc DB (less mature than SQLite)
-- No referential integrity (can have orphaned refs)
-- Harder to do cross-document queries
-
-### Option C: PostgreSQL with JSONB
-
-Best of both worlds but heavier:
+### Schema
 
 ```sql
-CREATE TABLE rentals (
+-- Operators (simple profiles, not real auth)
+CREATE TABLE operators (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    passcode TEXT NOT NULL,  -- Simple 4-digit code
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Shifts (operator work sessions)
+CREATE TABLE shifts (
     id SERIAL PRIMARY KEY,
     operator_id INTEGER REFERENCES operators(id),
-    status TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    -- Flexible parts
-    customer JSONB,           -- {"name": "John", "phone": "555", "future_field": "..."}
-    items JSONB,              -- Array of rental line items
-    pricing JSONB,            -- Flexible pricing structure
-    metadata JSONB            -- Anything else
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ended_at TIMESTAMPTZ,
+    summary JSONB,  -- {rentals_count, revenue, notes}
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Can still index and query JSON efficiently
-CREATE INDEX idx_customer_phone ON rentals ((customer->>'phone'));
+-- Product Types (configurable categories)
+CREATE TABLE product_types (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,              -- "Surfboard", "Snorkel Mask"
+    code_prefix TEXT NOT NULL,       -- "SURF", "MASK"
+    tracking_type TEXT NOT NULL,     -- "tracked" or "generic"
+    pricing JSONB NOT NULL,          -- {hourly_rate, daily_rate, deposit}
+    attributes JSONB,                -- {sizes: ["S","M","L"], colors: [...]}
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tracked Items (individual equipment with unique IDs)
+CREATE TABLE tracked_items (
+    id SERIAL PRIMARY KEY,
+    product_type_id INTEGER REFERENCES product_types(id),
+    code TEXT UNIQUE NOT NULL,       -- "SURF-001", "MASK-003"
+    status TEXT DEFAULT 'available', -- "available", "rented", "blocked"
+    attributes JSONB,                -- {color: "blue", size: "7ft"}
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Generic Items (quantity-based inventory)
+CREATE TABLE generic_items (
+    id SERIAL PRIMARY KEY,
+    product_type_id INTEGER REFERENCES product_types(id),
+    name TEXT NOT NULL,              -- "Fins (pair)", "Bike Lock"
+    total_quantity INTEGER NOT NULL,
+    available_quantity INTEGER NOT NULL,
+    attributes JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Rentals (the core transaction)
+CREATE TABLE rentals (
+    id SERIAL PRIMARY KEY,
+    shift_id INTEGER REFERENCES shifts(id),
+    status TEXT NOT NULL DEFAULT 'active',  -- "active", "completed", "cancelled"
+    customer JSONB,                  -- {name, phone, email, notes, ...future fields}
+    items JSONB NOT NULL,            -- [{type, item_id, code, name, rate}, ...]
+    pricing JSONB NOT NULL,          -- {type: "hourly"|"daily", rates, deposit, total}
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expected_return_at TIMESTAMPTZ,
+    returned_at TIMESTAMPTZ,
+    return_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Equipment Blocks (maintenance, reservations)
+CREATE TABLE equipment_blocks (
+    id SERIAL PRIMARY KEY,
+    tracked_item_id INTEGER REFERENCES tracked_items(id),
+    reason TEXT NOT NULL,            -- "maintenance", "reserved", "damaged"
+    blocked_from TIMESTAMPTZ NOT NULL,
+    blocked_until TIMESTAMPTZ NOT NULL,
+    notes TEXT,
+    created_by INTEGER REFERENCES operators(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Action Log (audit trail for future metrics)
+CREATE TABLE action_log (
+    id SERIAL PRIMARY KEY,
+    shift_id INTEGER REFERENCES shifts(id),
+    action_type TEXT NOT NULL,       -- "rental_start", "rental_end", "block", etc.
+    entity_type TEXT NOT NULL,       -- "rental", "tracked_item", "generic_item"
+    entity_id INTEGER NOT NULL,
+    details JSONB,                   -- Action-specific data
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for common queries
+CREATE INDEX idx_tracked_items_status ON tracked_items(status);
+CREATE INDEX idx_tracked_items_product ON tracked_items(product_type_id);
+CREATE INDEX idx_rentals_status ON rentals(status);
+CREATE INDEX idx_rentals_shift ON rentals(shift_id);
+CREATE INDEX idx_rentals_dates ON rentals(started_at, returned_at);
+CREATE INDEX idx_action_log_created ON action_log(created_at);
+CREATE INDEX idx_action_log_type ON action_log(action_type);
+
+-- JSONB indexes for common queries
+CREATE INDEX idx_rentals_customer_phone ON rentals ((customer->>'phone'));
 ```
 
-**Pros:**
-- Robust, battle-tested
-- JSONB is fast and indexable
-- Referential integrity where you want it
-- Flexible where you need it
-
-**Cons:**
-- External server (PostgreSQL)
-- More setup on Hetzner
-- Overkill for single-user app?
-
-### Option D: SQLite + "EAV-lite" Pattern
-
-Entity-Attribute-Value for truly dynamic fields:
+### Example Data
 
 ```sql
--- Core rental record
-CREATE TABLE rentals (id, operator_id, status, created_at);
+-- Product type with flexible pricing
+INSERT INTO product_types (name, code_prefix, tracking_type, pricing) VALUES
+('Surfboard', 'SURF', 'tracked', '{"hourly_rate": 15, "daily_rate": 50, "deposit": 100}'),
+('Snorkel Mask', 'MASK', 'tracked', '{"hourly_rate": 8, "daily_rate": 25, "deposit": 20}'),
+('Fins', 'FIN', 'generic', '{"hourly_rate": 5, "daily_rate": 15, "deposit": 0}');
 
--- Dynamic properties
-CREATE TABLE rental_properties (
-    rental_id INTEGER REFERENCES rentals(id),
-    key TEXT NOT NULL,
-    value TEXT,  -- JSON-encoded
-    PRIMARY KEY (rental_id, key)
+-- Tracked item with custom attributes
+INSERT INTO tracked_items (product_type_id, code, attributes) VALUES
+(1, 'SURF-001', '{"size": "7ft", "color": "blue", "brand": "Channel Islands"}');
+
+-- Rental with mixed items (JSONB flexibility)
+INSERT INTO rentals (shift_id, customer, items, pricing) VALUES
+(1,
+ '{"name": "John Doe", "phone": "555-1234"}',
+ '[
+   {"type": "tracked", "item_id": 5, "code": "MASK-003", "name": "Snorkel Mask", "rate": 8},
+   {"type": "generic", "item_id": 2, "name": "Fins", "quantity": 1, "rate": 5}
+ ]',
+ '{"type": "hourly", "subtotal": 13, "deposit": 20, "total": 33}'
 );
 ```
 
-**Pros:**
-- Pure SQLite, no JSON functions needed
-- Add any property without schema change
-- Simple to understand
+### Future Odoo Integration Points
 
-**Cons:**
-- Queries become awkward (lots of joins)
-- Performance degrades with many properties
-- Not idiomatic
+When integrating with Odoo, these map naturally:
+- `operators` → Odoo `hr.employee` or `res.users`
+- `rentals` → Odoo `sale.order` with rental products
+- `product_types` → Odoo `product.template`
+- `action_log` → Odoo accounting entries
 
----
-
-### My Recommendation: Option A or C
-
-**For simplicity → Option A (SQLite + JSON columns)**
-- You keep single-file simplicity
-- Use JSON columns for: customer info, item details, pricing, metadata
-- Use regular columns for: IDs, timestamps, status, foreign keys
-- SQLite 3.38+ has good JSON support
-
-**For robustness → Option C (PostgreSQL + JSONB)**
-- If you're on Hetzner anyway, PostgreSQL is easy to set up
-- Better JSON handling than SQLite
-- Scales better if app grows
-- Still just one `docker-compose` service
-
-### Questions for You:
-
-1. **How often do you expect schema changes?** Weekly? Monthly? Yearly?
-2. **Do you need complex queries across rentals?** (e.g., "all rentals of SURF-001 in December")
-3. **Is "one file database" important?** Or is PostgreSQL acceptable complexity?
-4. **Expected data volume?** 10 rentals/day? 100? 1000?
+Both systems on PostgreSQL means you can:
+- Use foreign data wrappers for cross-DB queries
+- Run both in same PostgreSQL instance if desired
+- Use similar tooling for backups and monitoring
 
 ---
 
@@ -357,8 +378,9 @@ rental-manager/
 ### Phase 1: Foundation
 - [ ] Initialize SvelteKit project with TypeScript
 - [ ] Configure Tailwind CSS
-- [ ] Set up database (pending decision)
-- [ ] Create initial schema
+- [ ] Set up Docker Compose with PostgreSQL
+- [ ] Configure Drizzle ORM with PostgreSQL
+- [ ] Create initial schema and run migrations
 - [ ] Set up basic app layout shell
 - [ ] Implement shift login screen
 
@@ -396,12 +418,12 @@ rental-manager/
 - [ ] Touch optimizations
 - [ ] PWA manifest
 
-### Phase 7: Deployment
-- [ ] Dockerfile
-- [ ] docker-compose
-- [ ] Nginx + SSL
-- [ ] PM2 config
-- [ ] Backup strategy
+### Phase 7: Deployment (Hetzner)
+- [ ] Production Dockerfile for SvelteKit app
+- [ ] docker-compose.yml with PostgreSQL + app services
+- [ ] Nginx reverse proxy with SSL (Let's Encrypt)
+- [ ] PostgreSQL backup script (pg_dump cron)
+- [ ] Environment configuration (.env.production)
 
 ## API Endpoints
 
