@@ -1,9 +1,12 @@
 <script lang="ts">
 	let { data } = $props();
 
-	function getTypeName(id: number) {
-		return data.types.find(t => t.id === id)?.name || 'Unknown';
+	function getCategoryName(id: number) {
+		return data.categories.find(c => c.id === id)?.name || 'Unknown';
 	}
+
+	const trackedCategories = $derived(data.categories.filter(c => c.trackingType === 'tracked'));
+	const genericCategories = $derived(data.categories.filter(c => c.trackingType === 'generic'));
 </script>
 
 <h1>Inventory</h1>
@@ -14,7 +17,7 @@
 	<table style="width: 100%; border-collapse: collapse;">
 		<thead>
 			<tr>
-				<th style="text-align: left; padding: 0.5rem;">Type</th>
+				<th style="text-align: left; padding: 0.5rem;">Category</th>
 				<th style="text-align: left; padding: 0.5rem;">Code</th>
 				<th style="text-align: left; padding: 0.5rem;">Status</th>
 			</tr>
@@ -22,9 +25,9 @@
 		<tbody>
 			{#each data.trackedItems as item}
 				<tr>
-					<td style="padding: 0.5rem;">{getTypeName(item.productTypeId ?? 0)}</td>
+					<td style="padding: 0.5rem;">{getCategoryName(item.productTypeId ?? 0)}</td>
 					<td style="padding: 0.5rem;">{item.code}</td>
-					<td style="padding: 0.5rem;">{item.status}</td>
+					<td style="padding: 0.5rem; color: {item.status === 'available' ? 'green' : 'orange'};">{item.status}</td>
 				</tr>
 			{/each}
 			{#if data.trackedItems.length === 0}
@@ -39,23 +42,21 @@
 	<table style="width: 100%; border-collapse: collapse;">
 		<thead>
 			<tr>
-				<th style="text-align: left; padding: 0.5rem;">Type</th>
-				<th style="text-align: left; padding: 0.5rem;">Name</th>
-				<th style="text-align: left; padding: 0.5rem;">Total</th>
+				<th style="text-align: left; padding: 0.5rem;">Category</th>
 				<th style="text-align: left; padding: 0.5rem;">Available</th>
+				<th style="text-align: left; padding: 0.5rem;">Total</th>
 			</tr>
 		</thead>
 		<tbody>
-			{#each data.genericItems as item}
+			{#each genericCategories as cat}
 				<tr>
-					<td style="padding: 0.5rem;">{getTypeName(item.productTypeId ?? 0)}</td>
-					<td style="padding: 0.5rem;">{item.name}</td>
-					<td style="padding: 0.5rem;">{item.totalQuantity}</td>
-					<td style="padding: 0.5rem;">{item.availableQuantity}</td>
+					<td style="padding: 0.5rem;">{cat.name}</td>
+					<td style="padding: 0.5rem; color: {(cat.availableQuantity ?? 0) > 0 ? 'green' : 'red'};">{cat.availableQuantity}</td>
+					<td style="padding: 0.5rem;">{cat.totalQuantity}</td>
 				</tr>
 			{/each}
-			{#if data.genericItems.length === 0}
-				<tr><td colspan="4" style="padding: 0.5rem;">No generic items</td></tr>
+			{#if genericCategories.length === 0}
+				<tr><td colspan="3" style="padding: 0.5rem;">No generic categories</td></tr>
 			{/if}
 		</tbody>
 	</table>

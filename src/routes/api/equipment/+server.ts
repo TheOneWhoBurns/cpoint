@@ -1,58 +1,73 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { productTypes, trackedItems, genericItems } from '$lib/server/db/schema';
+import { productTypes, trackedItems } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
-	const types = await db.select().from(productTypes);
+	const categories = await db.select().from(productTypes);
 	const tracked = await db.select().from(trackedItems);
-	const generic = await db.select().from(genericItems);
-	return json({ types, tracked, generic });
+	return json({ categories, trackedItems: tracked });
 };
 
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
 	const { action } = body;
 
-	if (action === 'createType') {
-		const { name, codePrefix, trackingType } = body;
-		if (!name || !trackingType || !codePrefix) {
-			return json({ error: 'Name, codePrefix, and trackingType required' }, { status: 400 });
+	if (action === 'createCategory') {
+		const { name, trackingType } = body;
+		if (!name || !trackingType) {
+			return json({ error: 'Name and trackingType required' }, { status: 400 });
 		}
 		if (!['tracked', 'generic'].includes(trackingType)) {
 			return json({ error: 'trackingType must be tracked or generic' }, { status: 400 });
 		}
 		const [created] = await db
 			.insert(productTypes)
-			.values({ name, codePrefix, trackingType })
+			.values({
+				name,
+				trackingType,
+				totalQuantity: 0,
+				availableQuantity: 0
+			})
 			.returning();
 		return json(created, { status: 201 });
 	}
 
-	if (action === 'addTracked') {
-		const { productTypeId, code } = body;
-		if (!productTypeId || !code) {
-			return json({ error: 'productTypeId and code required' }, { status: 400 });
+	if (action === 'addTrackedItem') {
+		const { categoryId, code } = body;
+		if (!categoryId || !code) {
+			return json({ error: 'categoryId and code required' }, { status: 400 });
+		}
+		const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, categoryId));
+		if (!cat || cat.trackingType !== 'tracked') {
+			return json({ error: 'Category not found or not a tracked type' }, { status: 400 });
 		}
 		const [created] = await db
 			.insert(trackedItems)
-			.values({ productTypeId, code, status: 'available' })
+			.values({ productTypeId: categoryId, code, status: 'available' })
 			.returning();
 		return json(created, { status: 201 });
 	}
 
-	if (action === 'addGeneric') {
-		const { productTypeId, name, quantity } = body;
-		if (!productTypeId || !name) {
-			return json({ error: 'productTypeId and name required' }, { status: 400 });
+	if (action === 'addGenericQuantity') {
+		const { categoryId, quantity } = body;
+		if (!categoryId || !quantity || quantity < 1) {
+			return json({ error: 'categoryId and positive quantity required' }, { status: 400 });
 		}
-		const qty = quantity || 1;
-		const [created] = await db
-			.insert(genericItems)
-			.values({ productTypeId, name, totalQuantity: qty, availableQuantity: qty })
+		const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, categoryId));
+		if (!cat || cat.trackingType !== 'generic') {
+			return json({ error: 'Category not found or not a generic type' }, { status: 400 });
+		}
+		const [updated] = await db
+			.update(productTypes)
+			.set({
+				totalQuantity: (cat.totalQuantity ?? 0) + quantity,
+				availableQuantity: (cat.availableQuantity ?? 0) + quantity
+			})
+			.where(eq(productTypes.id, categoryId))
 			.returning();
-		return json(created, { status: 201 });
+		return json(updated);
 	}
 
 	return json({ error: 'Invalid action' }, { status: 400 });

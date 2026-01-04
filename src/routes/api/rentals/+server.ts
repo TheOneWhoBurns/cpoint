@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { rentals, trackedItems, genericItems } from '$lib/server/db/schema';
+import { rentals, trackedItems, productTypes } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -27,16 +27,16 @@ export const POST: RequestHandler = async ({ request }) => {
 				.set({ status: 'rented' })
 				.where(eq(trackedItems.id, item.itemId));
 		} else if (item.type === 'generic') {
-			const [existing] = await db
+			const [cat] = await db
 				.select()
-				.from(genericItems)
-				.where(eq(genericItems.id, item.itemId));
-			if (existing) {
-				const newAvailable = Math.max(0, existing.availableQuantity - (item.quantity || 1));
+				.from(productTypes)
+				.where(eq(productTypes.id, item.categoryId));
+			if (cat) {
+				const newAvailable = Math.max(0, (cat.availableQuantity ?? 0) - (item.quantity || 1));
 				await db
-					.update(genericItems)
+					.update(productTypes)
 					.set({ availableQuantity: newAvailable })
-					.where(eq(genericItems.id, item.itemId));
+					.where(eq(productTypes.id, item.categoryId));
 			}
 		}
 	}
@@ -67,24 +67,24 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json({ error: 'Rental not found' }, { status: 404 });
 		}
 
-		const rentalItems = rental.items as Array<{type: string, itemId: number, quantity?: number}>;
+		const rentalItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
 		for (const item of rentalItems) {
-			if (item.type === 'tracked') {
+			if (item.type === 'tracked' && item.itemId) {
 				await db
 					.update(trackedItems)
 					.set({ status: 'available' })
 					.where(eq(trackedItems.id, item.itemId));
-			} else if (item.type === 'generic') {
-				const [existing] = await db
+			} else if (item.type === 'generic' && item.categoryId) {
+				const [cat] = await db
 					.select()
-					.from(genericItems)
-					.where(eq(genericItems.id, item.itemId));
-				if (existing) {
-					const newAvailable = existing.availableQuantity + (item.quantity || 1);
+					.from(productTypes)
+					.where(eq(productTypes.id, item.categoryId));
+				if (cat) {
+					const newAvailable = (cat.availableQuantity ?? 0) + (item.quantity || 1);
 					await db
-						.update(genericItems)
+						.update(productTypes)
 						.set({ availableQuantity: newAvailable })
-						.where(eq(genericItems.id, item.itemId));
+						.where(eq(productTypes.id, item.categoryId));
 				}
 			}
 		}

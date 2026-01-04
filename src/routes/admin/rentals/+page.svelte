@@ -1,6 +1,5 @@
 <script lang="ts">
 	import '@material/web/button/filled-button.js';
-	import '@material/web/button/outlined-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
 
 	let { data } = $props();
@@ -9,12 +8,15 @@
 	let customerPhone = $state('');
 	let hourlyRate = $state('');
 	let fullDayRate = $state('');
-	let selectedItems = $state<Array<{type: string, itemId: number, code?: string, name: string, quantity?: number}>>([]);
+	let selectedItems = $state<Array<{type: string, itemId?: number, categoryId?: number, code?: string, name: string, quantity?: number}>>([]);
 	let loading = $state(false);
 	let error = $state('');
 
-	function getTypeName(id: number) {
-		return data.types.find(t => t.id === id)?.name || 'Unknown';
+	const trackedCategories = $derived(data.categories.filter(c => c.trackingType === 'tracked'));
+	const genericCategories = $derived(data.categories.filter(c => c.trackingType === 'generic' && (c.availableQuantity ?? 0) > 0));
+
+	function getCategoryName(id: number) {
+		return data.categories.find(c => c.id === id)?.name || 'Unknown';
 	}
 
 	function addTrackedItem(item: typeof data.trackedItems[0]) {
@@ -23,24 +25,24 @@
 			type: 'tracked',
 			itemId: item.id,
 			code: item.code,
-			name: `${getTypeName(item.productTypeId ?? 0)} - ${item.code}`
+			name: `${getCategoryName(item.productTypeId ?? 0)} - ${item.code}`
 		}];
 	}
 
-	function addGenericItem(item: typeof data.genericItems[0], qty: number) {
-		if (qty <= 0 || qty > item.availableQuantity) return;
-		const existing = selectedItems.find(i => i.type === 'generic' && i.itemId === item.id);
+	function addGenericItem(cat: typeof data.categories[0], qty: number) {
+		if (qty <= 0 || qty > (cat.availableQuantity ?? 0)) return;
+		const existing = selectedItems.find(i => i.type === 'generic' && i.categoryId === cat.id);
 		if (existing) {
 			selectedItems = selectedItems.map(i =>
-				i.type === 'generic' && i.itemId === item.id
+				i.type === 'generic' && i.categoryId === cat.id
 					? {...i, quantity: qty}
 					: i
 			);
 		} else {
 			selectedItems = [...selectedItems, {
 				type: 'generic',
-				itemId: item.id,
-				name: `${getTypeName(item.productTypeId ?? 0)} - ${item.name}`,
+				categoryId: cat.id,
+				name: cat.name,
 				quantity: qty
 			}];
 		}
@@ -172,7 +174,7 @@
 				<ul>
 					{#each data.trackedItems as item}
 						<li>
-							{getTypeName(item.productTypeId ?? 0)} - {item.code}
+							{getCategoryName(item.productTypeId ?? 0)} - {item.code}
 							<button onclick={() => addTrackedItem(item)}>Add</button>
 						</li>
 					{/each}
@@ -180,22 +182,22 @@
 			{/if}
 
 			<h3 style="margin-top: 1rem;">Available Generic Items</h3>
-			{#if data.genericItems.length === 0}
-				<p>No generic items</p>
+			{#if genericCategories.length === 0}
+				<p>No generic items available</p>
 			{:else}
 				<ul>
-					{#each data.genericItems.filter(g => g.availableQuantity > 0) as item}
+					{#each genericCategories as cat}
 						<li>
-							{getTypeName(item.productTypeId ?? 0)} - {item.name} ({item.availableQuantity} avail)
+							{cat.name} ({cat.availableQuantity} avail)
 							<input
 								type="number"
 								min="1"
-								max={item.availableQuantity}
-								value={genericQty[item.id] || '1'}
-								oninput={(e: Event) => genericQty[item.id] = (e.target as HTMLInputElement).value}
+								max={cat.availableQuantity}
+								value={genericQty[cat.id] || '1'}
+								oninput={(e: Event) => genericQty[cat.id] = (e.target as HTMLInputElement).value}
 								style="width: 50px;"
 							/>
-							<button onclick={() => addGenericItem(item, parseInt(genericQty[item.id]) || 1)}>Add</button>
+							<button onclick={() => addGenericItem(cat, parseInt(genericQty[cat.id]) || 1)}>Add</button>
 						</li>
 					{/each}
 				</ul>
@@ -213,13 +215,12 @@
 				<th style="text-align: left; padding: 0.5rem;">Customer</th>
 				<th style="text-align: left; padding: 0.5rem;">Items</th>
 				<th style="text-align: left; padding: 0.5rem;">Pricing</th>
-				<th style="text-align: left; padding: 0.5rem;">Status</th>
 				<th style="text-align: left; padding: 0.5rem;">Actions</th>
 			</tr>
 		</thead>
 		<tbody>
 			{#each data.rentals.filter(r => r.status === 'active') as rental}
-				{@const customer = rental.customer as {name?: string, phone?: string} | null}
+				{@const customer = rental.customer as {name?: string} | null}
 				{@const items = rental.items as Array<{name: string, quantity?: number}>}
 				{@const pricing = rental.pricing as {hourly?: number, fullDay?: number}}
 				<tr>
@@ -231,14 +232,13 @@
 						{#if pricing.hourly && pricing.fullDay} / {/if}
 						{#if pricing.fullDay}${pricing.fullDay}/day{/if}
 					</td>
-					<td style="padding: 0.5rem;">{rental.status}</td>
 					<td style="padding: 0.5rem;">
 						<button onclick={() => completeRental(rental.id)}>Complete</button>
 					</td>
 				</tr>
 			{/each}
 			{#if data.rentals.filter(r => r.status === 'active').length === 0}
-				<tr><td colspan="6" style="padding: 0.5rem;">No active rentals</td></tr>
+				<tr><td colspan="5" style="padding: 0.5rem;">No active rentals</td></tr>
 			{/if}
 		</tbody>
 	</table>
