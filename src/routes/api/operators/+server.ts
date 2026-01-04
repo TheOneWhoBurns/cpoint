@@ -40,3 +40,23 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	return json(newOperator, { status: 201 });
 };
+
+export const PATCH: RequestHandler = async ({ request }) => {
+	const { id, isActive } = await request.json();
+
+	if (!id) {
+		return json({ error: 'Operator ID required' }, { status: 400 });
+	}
+
+	const [updated] = await db
+		.update(operators)
+		.set({ isActive })
+		.where(eq(operators.id, id))
+		.returning({
+			id: operators.id,
+			name: operators.name,
+			isActive: operators.isActive
+		});
+
+	return json(updated);
+};

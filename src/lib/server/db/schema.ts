@@ -20,10 +20,9 @@ export const shifts = pgTable('shifts', {
 export const productTypes = pgTable('product_types', {
 	id: serial('id').primaryKey(),
 	name: text('name').notNull(),
-	codePrefix: text('code_prefix').notNull(),
 	trackingType: text('tracking_type').notNull(),
-	pricing: jsonb('pricing').notNull(),
-	attributes: jsonb('attributes'),
+	totalQuantity: integer('total_quantity').default(0),
+	availableQuantity: integer('available_quantity').default(0),
 	isActive: boolean('is_active').default(true),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
@@ -42,16 +41,6 @@ export const trackedItems = pgTable('tracked_items', {
 	index('idx_tracked_items_product').on(table.productTypeId)
 ]);
 
-export const genericItems = pgTable('generic_items', {
-	id: serial('id').primaryKey(),
-	productTypeId: integer('product_type_id').references(() => productTypes.id),
-	name: text('name').notNull(),
-	totalQuantity: integer('total_quantity').notNull(),
-	availableQuantity: integer('available_quantity').notNull(),
-	attributes: jsonb('attributes'),
-	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
-});
 
 export const rentals = pgTable('rentals', {
 	id: serial('id').primaryKey(),
