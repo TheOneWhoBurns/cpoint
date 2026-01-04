@@ -48,23 +48,6 @@ Simple shift-based tracking (no real auth):
 - "End shift" logs them out and records shift end time
 - Shift summary: rentals handled, revenue collected
 
-```
-┌─────────────────────────────────┐
-│  Start Shift                    │
-│                                 │
-│  Select Operator:               │
-│  ┌─────────────────────────┐   │
-│  │ ● Maria                 │   │
-│  │ ○ Carlos                │   │
-│  │ ○ Ana                   │   │
-│  └─────────────────────────┘   │
-│                                 │
-│  Passcode: [____]              │
-│                                 │
-│  [Start Shift]                  │
-└─────────────────────────────────┘
-```
-
 ## Tech Stack
 
 | Layer | Technology | Justification |
@@ -212,28 +195,32 @@ CREATE INDEX idx_action_log_type ON action_log(action_type);
 CREATE INDEX idx_rentals_customer_phone ON rentals ((customer->>'phone'));
 ```
 
-### Example Data
+### Example Data (Format Reference)
+
+These examples show JSONB structure - actual product types configured via admin UI.
 
 ```sql
--- Product type with flexible pricing
+-- Product type: tracked item with hourly + daily rates
 INSERT INTO product_types (name, code_prefix, tracking_type, pricing) VALUES
-('Surfboard', 'SURF', 'tracked', '{"hourly_rate": 15, "daily_rate": 50, "deposit": 100}'),
-('Snorkel Mask', 'MASK', 'tracked', '{"hourly_rate": 8, "daily_rate": 25, "deposit": 20}'),
-('Fins', 'FIN', 'generic', '{"hourly_rate": 5, "daily_rate": 15, "deposit": 0}');
+('Example Product', 'EX', 'tracked', '{"hourly_rate": 15, "daily_rate": 50, "deposit": 100}');
+
+-- Product type: generic item with daily rate only
+INSERT INTO product_types (name, code_prefix, tracking_type, pricing) VALUES
+('Example Accessory', 'ACC', 'generic', '{"daily_rate": 10, "deposit": 0}');
 
 -- Tracked item with custom attributes
 INSERT INTO tracked_items (product_type_id, code, attributes) VALUES
-(1, 'SURF-001', '{"size": "7ft", "color": "blue", "brand": "Channel Islands"}');
+(1, 'EX-001', '{"size": "M", "color": "blue", "condition": "good"}');
 
 -- Rental with mixed items (JSONB flexibility)
 INSERT INTO rentals (shift_id, customer, items, pricing) VALUES
 (1,
  '{"name": "John Doe", "phone": "555-1234"}',
  '[
-   {"type": "tracked", "item_id": 5, "code": "MASK-003", "name": "Snorkel Mask", "rate": 8},
-   {"type": "generic", "item_id": 2, "name": "Fins", "quantity": 1, "rate": 5}
+   {"type": "tracked", "item_id": 1, "code": "EX-001", "name": "Example Product", "rate": 15},
+   {"type": "generic", "item_id": 2, "name": "Accessory", "quantity": 2, "rate": 10}
  ]',
- '{"type": "hourly", "subtotal": 13, "deposit": 20, "total": 33}'
+ '{"type": "hourly", "subtotal": 35, "deposit": 100, "total": 135}'
 );
 ```
 
@@ -271,14 +258,8 @@ rental-manager/
 │   │   │   │   ├── metrics.ts         # Dashboard calculations
 │   │   │   │   └── action-log.ts      # Audit logging
 │   │   │   └── sse.ts                 # SSE manager
-│   │   ├── components/
-│   │   │   ├── Dashboard.svelte       # Top metrics bar
-│   │   │   ├── InventoryGrid.svelte   # Main item grid
-│   │   │   ├── TrackedItemCard.svelte # Individual tracked item
-│   │   │   ├── GenericItemCard.svelte # Generic item with quantity
-│   │   │   ├── RentalModal.svelte     # Build a rental (multi-item)
-│   │   │   ├── ShiftLogin.svelte      # Operator shift start
-│   │   │   └── ShiftBar.svelte        # Current operator display
+│   │   ├── components/               # UI components (Material 3)
+│   │   │   └── ...                   # Defined during implementation
 │   │   ├── stores/
 │   │   │   ├── inventory.ts
 │   │   │   ├── shift.ts               # Current operator session
@@ -324,32 +305,31 @@ rental-manager/
 - [ ] Admin UI for managing generic item stock
 - [ ] Configure pricing per product type
 
-### Phase 3: Core UI Components
-- [ ] Build TrackedItemCard with status colors
-- [ ] Build GenericItemCard with stock display
-- [ ] Create InventoryGrid layout
-- [ ] Build Dashboard metrics bar
-- [ ] Build ShiftBar showing current operator
+### Phase 3: Core UI
+- [ ] Main inventory view (tracked + generic items)
+- [ ] Dashboard metrics display
+- [ ] Current shift/operator indicator
+- [ ] Status indicators for items
 
 ### Phase 4: Rental Operations
-- [ ] Build RentalModal (multi-item selection)
-- [ ] Implement rental start logic
-- [ ] Implement rental return logic
-- [ ] Handle mixed tracked + generic items
-- [ ] Update inventory on rental events
-- [ ] Implement action logging
+- [ ] Rental creation flow (multi-item selection)
+- [ ] Rental start logic
+- [ ] Rental return logic
+- [ ] Mixed tracked + generic item handling
+- [ ] Inventory updates on rental events
+- [ ] Action logging
 
 ### Phase 5: Blocking & Shifts
-- [ ] Implement equipment blocking
-- [ ] Add blocking UI
-- [ ] Implement shift start/end
-- [ ] Shift summary on end
+- [ ] Equipment blocking logic
+- [ ] Blocking UI
+- [ ] Shift start/end logic
+- [ ] Shift summary
 
 ### Phase 6: Real-Time & Polish
-- [ ] Implement SSE for live updates
+- [ ] SSE for live updates
 - [ ] Dashboard auto-refresh
-- [ ] Loading states and error handling
-- [ ] Touch optimizations
+- [ ] Loading/error states
+- [ ] Touch optimization (tablet)
 - [ ] PWA manifest
 
 ### Phase 7: Deployment (Hetzner)
