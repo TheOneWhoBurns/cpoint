@@ -59,6 +59,11 @@
 		selectedOperator = operator;
 		error = '';
 	}
+
+	function handleBack() {
+		selectedOperator = null;
+		passcode = '';
+	}
 </script>
 
 <div class="login-page">
@@ -105,9 +110,11 @@
 				{/if}
 
 				<div class="actions">
-					<md-text-button onclick={() => { selectedOperator = null; passcode = ''; }}>
+					<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+					<md-text-button onclick={handleBack}>
 						Back
 					</md-text-button>
+					<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
 					<md-filled-button onclick={handleLogin} disabled={loading}>
 						{loading ? 'Starting...' : 'Start Shift'}
 					</md-filled-button>

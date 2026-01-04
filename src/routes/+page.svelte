@@ -4,7 +4,9 @@
 	import '@material/web/button/outlined-button.js';
 	import '@material/web/icon/icon.js';
 
-	let { data } = $props();
+	function handleEndShift() {
+		shiftStore.logout();
+	}
 </script>
 
 {#if $shiftStore.isLoggedIn}
@@ -17,7 +19,8 @@
 				<span class="operator-badge">
 					{$shiftStore.operator?.name}
 				</span>
-				<md-outlined-button onclick={() => shiftStore.logout()}>
+				<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+				<md-outlined-button onclick={handleEndShift}>
 					End Shift
 				</md-outlined-button>
 			</div>
