@@ -486,8 +486,62 @@ This way adding new customer fields doesn't require schema changes.
 
 ---
 
-## Next Steps
+## Deployment Configuration
 
-1. **Decide on database approach** (see discussion above)
-2. Finalize schema based on decision
-3. Begin Phase 1 implementation
+### docker-compose.yml
+
+```yaml
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rental
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: rental_manager
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://rental:${DB_PASSWORD}@db:5432/rental_manager
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+```
+
+### Backup Script
+
+```bash
+#!/bin/bash
+# /opt/scripts/backup-rental-db.sh
+BACKUP_DIR="/var/backups/rental-manager"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+mkdir -p $BACKUP_DIR
+docker exec rental-db pg_dump -U rental rental_manager > "$BACKUP_DIR/rental_$DATE.sql"
+gzip "$BACKUP_DIR/rental_$DATE.sql"
+
+# Keep last 7 days
+find $BACKUP_DIR -name "rental_*.sql.gz" -mtime +7 -delete
+```
+
+---
+
+## Ready to Implement
+
+Plan finalized with:
+- **PostgreSQL + JSONB** hybrid approach
+- **Tracked vs Generic** item model
+- **Mixed rentals** with line items
+- **Operator shifts** with simple passcode
+- **Odoo-ready** schema design
