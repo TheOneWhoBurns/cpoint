@@ -4,39 +4,31 @@
 
 A web app for managing equipment rentals, optimized for tablet use in landscape orientation.
 
-## Equipment Categories
+## Item Tracking Model
 
-| Category | Type | Tracking | Example |
-|----------|------|----------|---------|
-| Bikes | Tracked | Unique ID per bike | BIKE-001, BIKE-002 |
-| Surfboards | Tracked | Unique ID per board | SURF-001, SURF-002 |
-| Bodyboards | Tracked | Unique ID per board | BODY-001, BODY-002 |
-| Wetsuits | Tracked | Unique ID per suit | WET-S-01, WET-M-01 |
-| Snorkel Masks | Tracked | Unique ID per mask | MASK-001, MASK-002 |
-| Fins | Generic | Quantity-based | "Fins (pair)" - 20 in stock |
-| Bike Locks | Generic | Quantity-based | "Bike Lock" - 15 in stock |
+All product types and inventory items are configured via admin UI - nothing hardcoded.
 
-### Key Distinction: Tracked vs Generic Items
+### Two Tracking Types
 
 **Tracked Items:**
-- Have unique identifiers (SURF-001)
+- Have unique identifiers (e.g., SURF-001)
 - Individual status (available/rented/blocked)
 - Can be blocked for maintenance
-- History of who rented each specific item
+- Full rental history per item
 
 **Generic Items:**
-- Quantity-based inventory (15 fins available)
+- Quantity-based inventory (e.g., 15 available)
 - No individual tracking
-- Just decrement/increment stock count
+- Decrement/increment stock count
 - Often bundled with tracked items
 
 ### Mixed Rentals
 
-A single rental can include multiple items:
+A single rental can include multiple items of both types:
 ```
 Rental #1234
-├── MASK-003 (tracked) - Snorkel mask
-├── Fins x1 (generic) - from stock
+├── [tracked] MASK-003 - Snorkel mask
+├── [generic] Fins x1
 └── Customer: John, Phone: 555-1234
 ```
 
@@ -81,7 +73,7 @@ Simple shift-based tracking (no real auth):
 | **Framework** | SvelteKit | Full-stack, simple reactivity, small bundles |
 | **Database** | PostgreSQL + JSONB | Hybrid flexibility, Odoo-compatible |
 | **ORM** | Drizzle ORM | Type-safe, SQL-like, lightweight |
-| **Styling** | Tailwind CSS | Utility-first, great for responsive layouts |
+| **Styling** | Material Web (@material/web) | Material 3, Google's official web components |
 | **Real-time** | Server-Sent Events (SSE) | Simple one-way updates for dashboard |
 | **Deployment** | Docker Compose + Nginx | PostgreSQL + app containers, reverse proxy |
 
@@ -312,72 +304,14 @@ rental-manager/
 │   └── manifest.json                  # PWA for tablet
 ├── package.json
 ├── svelte.config.js
-├── tailwind.config.js
 └── Dockerfile
 ```
-
-## UI Layout (Tablet Landscape ~1024x768)
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  RENTAL MANAGER          👤 Maria (Shift: 2h 15m)        Today: $450 │ ⚙️  │
-├────────────────────────────────────────────────────────────────────────────┤
-│  ┌─── DASHBOARD METRICS ──────────────────────────────────────────────┐   │
-│  │  🏄 Rented: 12   │  ✅ Available: 8   │  📦 Generic: OK  │  💰 $450  │  │
-│  └────────────────────────────────────────────────────────────────────┘   │
-│                                                                            │
-│  ┌─── TRACKED ITEMS ──────────────────────────────────────────────────┐   │
-│  │   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐              │   │
-│  │   │ SURF-01 │  │ SURF-02 │  │ MASK-01 │  │ BIKE-01 │              │   │
-│  │   │ 🟢 Avail│  │ 🔴 2h15m│  │ 🟢 Avail│  │ 🟡 Block│              │   │
-│  │   │ $15/hr  │  │ John D. │  │ $10/hr  │  │ Repair  │              │   │
-│  │   └─────────┘  └─────────┘  └─────────┘  └─────────┘              │   │
-│  └────────────────────────────────────────────────────────────────────┘   │
-│                                                                            │
-│  ┌─── GENERIC ITEMS ──────────────────────────────────────────────────┐   │
-│  │   [Fins: 18 avail]  [Locks: 12 avail]  [Booties: 8 avail]         │   │
-│  └────────────────────────────────────────────────────────────────────┘   │
-│                                                                            │
-│  ┌─── ACTIONS ────────────────────────────────────────────────────────┐   │
-│  │   [+ New Rental]              [End Shift]                          │   │
-│  └────────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
-### New Rental Flow (Multi-Item)
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  NEW RENTAL                                            [X] │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Customer: [John Doe_________]  Phone: [555-1234____]      │
-│                                                             │
-│  ┌─── ITEMS IN RENTAL ────────────────────────────────┐    │
-│  │  MASK-003 (Snorkel Mask)              $10/hr  [x] │    │
-│  │  Fins (generic) x1                     $5/hr  [x] │    │
-│  │                                                    │    │
-│  │  [+ Add Tracked Item]  [+ Add Generic Item]        │    │
-│  └────────────────────────────────────────────────────┘    │
-│                                                             │
-│  Duration: ○ Hourly  ● Daily                               │
-│  Estimated Total: $30                                       │
-│                                                             │
-│              [Cancel]  [Start Rental]                       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Status Color Coding
-- 🟢 Green: Available
-- 🔴 Red: Currently rented (shows elapsed time or customer)
-- 🟡 Yellow: Blocked/Maintenance
-- ⚫ Gray: Inactive
 
 ## Implementation Phases
 
 ### Phase 1: Foundation
 - [ ] Initialize SvelteKit project with TypeScript
-- [ ] Configure Tailwind CSS
+- [ ] Configure Material Web (@material/web)
 - [ ] Set up Docker Compose with PostgreSQL
 - [ ] Configure Drizzle ORM with PostgreSQL
 - [ ] Create initial schema and run migrations
