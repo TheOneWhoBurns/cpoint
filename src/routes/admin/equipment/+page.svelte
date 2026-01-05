@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
 	import '@material/web/button/filled-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let { data } = $props();
 
@@ -11,6 +13,11 @@
 	let genericQuantity = $state('1');
 	let loading = $state(false);
 	let error = $state('');
+
+	let confirmDeleteCategory = $state(false);
+	let pendingDeleteCategoryId = $state<number | null>(null);
+	let confirmDeleteItem = $state(false);
+	let pendingDeleteItemId = $state<number | null>(null);
 
 	$effect(() => {
 		if (data.categories.length > 0 && !selectedCategoryId) {
@@ -39,7 +46,7 @@
 		if (res.ok) {
 			categoryName = '';
 			trackingType = 'tracked';
-			location.reload();
+			await invalidateAll();
 		} else {
 			const d = await res.json();
 			error = d.error || 'Failed';
@@ -84,7 +91,7 @@
 		if (res.ok) {
 			itemCode = '';
 			genericQuantity = '1';
-			location.reload();
+			await invalidateAll();
 		} else {
 			const d = await res.json();
 			error = d.error || 'Failed';
@@ -94,6 +101,77 @@
 
 	function getCategoryName(id: number) {
 		return data.categories.find(c => c.id === id)?.name || 'Unknown';
+	}
+
+	function promptDeleteCategory(id: number) {
+		pendingDeleteCategoryId = id;
+		confirmDeleteCategory = true;
+	}
+
+	async function executeDeleteCategory() {
+		if (!pendingDeleteCategoryId) return;
+		loading = true;
+		error = '';
+
+		const res = await fetch('/api/equipment', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action: 'deleteCategory', categoryId: pendingDeleteCategoryId })
+		});
+
+		if (res.ok) {
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			error = d.error || 'Failed to delete';
+		}
+		loading = false;
+		pendingDeleteCategoryId = null;
+	}
+
+	function promptDeleteItem(id: number) {
+		pendingDeleteItemId = id;
+		confirmDeleteItem = true;
+	}
+
+	async function executeDeleteItem() {
+		if (!pendingDeleteItemId) return;
+		loading = true;
+		error = '';
+
+		const res = await fetch('/api/equipment', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action: 'deleteTrackedItem', itemId: pendingDeleteItemId })
+		});
+
+		if (res.ok) {
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			error = d.error || 'Failed to delete';
+		}
+		loading = false;
+		pendingDeleteItemId = null;
+	}
+
+	async function updateGenericQuantity(id: number, newAvailable: number) {
+		loading = true;
+		error = '';
+
+		const res = await fetch('/api/equipment', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ id, availableQuantity: newAvailable })
+		});
+
+		if (res.ok) {
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			error = d.error || 'Failed to update';
+		}
+		loading = false;
 	}
 </script>
 
@@ -134,6 +212,7 @@
 				<th style="text-align: left; padding: 0.5rem;">Type</th>
 				<th style="text-align: left; padding: 0.5rem;">Quantity</th>
 				<th style="text-align: left; padding: 0.5rem;">Status</th>
+				<th style="text-align: left; padding: 0.5rem;">Actions</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -143,19 +222,35 @@
 					<td style="padding: 0.5rem;">{cat.trackingType}</td>
 					<td style="padding: 0.5rem;">
 						{#if cat.trackingType === 'generic'}
-							{cat.availableQuantity}/{cat.totalQuantity}
+							<div style="display: flex; gap: 0.5rem; align-items: center;">
+								<input
+									type="number"
+									min="0"
+									value={cat.availableQuantity ?? 0}
+									onchange={(e: Event) => updateGenericQuantity(cat.id, parseInt((e.target as HTMLInputElement).value) || 0)}
+									style="width: 80px;"
+								/>
+								<span>/{cat.totalQuantity}</span>
+							</div>
 						{:else}
 							{data.trackedItems.filter(t => t.productTypeId === cat.id).length} items
 						{/if}
 					</td>
 					<td style="padding: 0.5rem;">{cat.isActive ? 'Active' : 'Inactive'}</td>
+					<td style="padding: 0.5rem;">
+						<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+						<button onclick={() => promptDeleteCategory(cat.id)} style="color: var(--md-sys-color-error);">
+							Delete
+						</button>
+					</td>
 				</tr>
 			{/each}
 			{#if data.categories.length === 0}
-				<tr><td colspan="4" style="padding: 0.5rem;">No categories yet</td></tr>
+				<tr><td colspan="5" style="padding: 0.5rem;">No categories yet</td></tr>
 			{/if}
 		</tbody>
 	</table>
+	{#if error}<p style="color: var(--md-sys-color-error); margin-top: 1rem;">{error}</p>{/if}
 </section>
 
 <section style="margin-top: 2rem;">
@@ -209,6 +304,7 @@
 				<th style="text-align: left; padding: 0.5rem;">Category</th>
 				<th style="text-align: left; padding: 0.5rem;">Code</th>
 				<th style="text-align: left; padding: 0.5rem;">Status</th>
+				<th style="text-align: left; padding: 0.5rem;">Actions</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -217,11 +313,37 @@
 					<td style="padding: 0.5rem;">{getCategoryName(item.productTypeId ?? 0)}</td>
 					<td style="padding: 0.5rem;">{item.code}</td>
 					<td style="padding: 0.5rem;">{item.status}</td>
+					<td style="padding: 0.5rem;">
+						<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+						<button onclick={() => promptDeleteItem(item.id)} style="color: var(--md-sys-color-error);">
+							Delete
+						</button>
+					</td>
 				</tr>
 			{/each}
 			{#if data.trackedItems.length === 0}
-				<tr><td colspan="3" style="padding: 0.5rem;">No tracked items registered</td></tr>
+				<tr><td colspan="4" style="padding: 0.5rem;">No tracked items registered</td></tr>
 			{/if}
 		</tbody>
 	</table>
 </section>
+
+<ConfirmModal
+	bind:open={confirmDeleteCategory}
+	title="Delete Category"
+	message="Are you sure you want to delete this category? This action cannot be undone."
+	confirmText="Delete"
+	cancelText="Cancel"
+	variant="danger"
+	onConfirm={executeDeleteCategory}
+/>
+
+<ConfirmModal
+	bind:open={confirmDeleteItem}
+	title="Delete Item"
+	message="Are you sure you want to delete this tracked item? This action cannot be undone."
+	confirmText="Delete"
+	cancelText="Cancel"
+	variant="danger"
+	onConfirm={executeDeleteItem}
+/>

@@ -9,8 +9,10 @@
 		<a href="/admin">Admin</a>
 		<a href="/admin/operators">Operators</a>
 		<a href="/admin/equipment">Equipment</a>
+		<a href="/admin/rental-products">Rental Products</a>
+		<a href="/admin/store-products">Store Products</a>
+		<a href="/admin/guides">Guides</a>
 		<a href="/admin/inventory">Inventory</a>
-		<a href="/admin/rentals">Rentals</a>
 		<a href="/">Back to App</a>
 	</nav>
 	<main class="admin-content">
@@ -22,7 +24,7 @@
 	.admin-layout {
 		display: flex;
 		flex-direction: column;
-		min-height: 100vh;
+		height: 100vh;
 	}
 	.admin-nav {
 		display: flex;
@@ -43,5 +45,6 @@
 	.admin-content {
 		flex: 1;
 		padding: 1.5rem;
+		overflow-y: auto;
 	}
 </style>

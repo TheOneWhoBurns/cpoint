@@ -47,7 +47,7 @@
 			}
 
 			const result = await response.json();
-			shiftStore.login(selectedOperator, result.shift);
+			shiftStore.setSession(result.operator, result.shift);
 			goto('/');
 		} catch (e) {
 			error = 'Connection error';

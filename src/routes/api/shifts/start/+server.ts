@@ -4,7 +4,7 @@ import { operators, shifts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, cookies }) => {
 	const { operatorId, passcode } = await request.json();
 
 	if (!operatorId || !passcode) {
@@ -29,16 +29,23 @@ export const POST: RequestHandler = async ({ request }) => {
 		.from(shifts)
 		.where(and(eq(shifts.operatorId, operatorId), isNull(shifts.endedAt)));
 
-	if (existingShift) {
-		return json({ shift: existingShift });
+	let shift = existingShift;
+	if (!existingShift) {
+		const [newShift] = await db
+			.insert(shifts)
+			.values({
+				operatorId
+			})
+			.returning();
+		shift = newShift;
 	}
 
-	const [newShift] = await db
-		.insert(shifts)
-		.values({
-			operatorId
-		})
-		.returning();
+	cookies.set('operatorId', String(operatorId), {
+		path: '/',
+		httpOnly: true,
+		sameSite: 'lax',
+		maxAge: 60 * 60 * 24
+	});
 
-	return json({ shift: newShift });
+	return json({ operator, shift });
 };

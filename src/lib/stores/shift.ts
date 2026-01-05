@@ -16,10 +16,17 @@ function createShiftStore() {
 
 	return {
 		subscribe,
-		login: (operator: Operator, shift: Shift) => {
+		setSession: (operator: Operator, shift: Shift) => {
 			set({ operator, shift, isLoggedIn: true });
 		},
-		logout: () => {
+		clearSession: () => {
+			set({ operator: null, shift: null, isLoggedIn: false });
+		},
+		login: async (operator: Operator, shift: Shift) => {
+			set({ operator, shift, isLoggedIn: true });
+		},
+		logout: async () => {
+			await fetch('/api/shifts/logout', { method: 'POST' });
 			set({ operator: null, shift: null, isLoggedIn: false });
 		},
 		updateShift: (shift: Shift) => {
