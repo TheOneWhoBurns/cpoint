@@ -19,7 +19,11 @@ read -r -d '' USERDATA << 'BOOTSTRAP' || true
 #!/bin/bash
 set -e
 yum update -y
-yum install -y docker git nodejs nginx
+yum install -y docker git nginx
+
+# Install Node.js 20.x
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+yum install -y nodejs
 
 # Install Docker Compose v2
 curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
