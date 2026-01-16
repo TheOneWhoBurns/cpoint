@@ -1,0 +1,16 @@
+{
+  "name": "rental-system-wakeup-worker",
+  "version": "1.0.0",
+  "description": "CloudFlare Worker for scale-to-zero auto wake-up detection",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "dependencies": {}
+}

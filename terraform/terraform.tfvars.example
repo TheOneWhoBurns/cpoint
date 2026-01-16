@@ -1,0 +1,47 @@
+# AWS Scale-to-Zero Deployment Configuration
+# Copy this file to terraform.tfvars and fill in your values
+
+# AWS Configuration
+aws_region = "us-east-1"
+environment = "production"
+
+# Domain Configuration
+# Must be the punycode representation: xn--caonpoint-m6a.com
+domain_name = "xn--caonpoint-m6a.com"
+subdomain_odoo = "odoo"
+
+# EC2 Instance Configuration
+# t4g.small = $0.0042/hour (recommended baseline)
+# t4g.medium = $0.0084/hour (if you need more resources)
+instance_type = "t4g.small"
+
+# ASG Scaling Configuration
+initial_desired_capacity = 0  # Start scaled down (0 = cost-efficient)
+idle_timeout_minutes = 30     # Scale down after 30 minutes of idle time
+
+# Business Hours Scaling (Optional)
+business_hours_only = true    # Enable automatic scale up/down
+# Cron expressions are in UTC, adjust if needed:
+# Scale up: 6:00 AM UTC = 1:00 AM EST / 12:00 AM CST
+# Scale down: 10:00 PM UTC = 3:00 PM EST / 2:00 PM CST
+# For Ecuador (UTC-5): 6 AM UTC = 1 AM ECT, 10 PM UTC = 5 PM ECT
+
+# Database Credentials
+# Use a strong password (16+ characters, mix of upper/lower/numbers/symbols)
+db_password = "ChangeMe!SecurePassword123!"
+odoo_master_password = "ChangeMe!OdooAdminPass456!"
+
+# SSH Access
+# Restrict this to your IP for security: ["203.0.113.0/32"]
+# Or use ["0.0.0.0/0"] for development (not recommended for production)
+ssh_cidr_blocks = ["0.0.0.0/0"]
+
+# Backup Configuration
+backup_retention_days = 30    # Days in S3 Standard before moving to Glacier
+
+# Spot Instance Configuration (Recommended for cost savings)
+enable_spot_instances = true
+spot_max_price = ""           # Empty = use current spot price
+
+# Business Hours Timezone (for reference, cron is UTC)
+business_hours_timezone = "America/Guayaquil"

@@ -1,0 +1,35 @@
+name = "rental-system-wakeup"
+type = "javascript"
+account_id = ""  # Set this to your CloudFlare Account ID
+workers_dev = true
+main = "worker.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[build]
+command = "npm install"
+cwd = "./"
+watch_paths = ["src/**/*.js"]
+
+# Environment configuration
+[env.production]
+name = "rental-system-wakeup-prod"
+
+# Routes for the worker
+[[routes]]
+# Main domain
+pattern = "xn--caonpoint-m6a.com/*"
+zone_name = "xn--caonpoint-m6a.com"
+custom_domain = true
+
+[[routes]]
+# Odoo subdomain
+pattern = "odoo.xn--caonpoint-m6a.com/*"
+zone_name = "xn--caonpoint-m6a.com"
+custom_domain = true
+
+# Services (for potential future use)
+[[services]]
+binding = "BACKEND"
+service = "rental-system-wakeup"
+environment = "production"
