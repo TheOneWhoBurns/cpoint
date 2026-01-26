@@ -4,7 +4,13 @@
 	import { untrack } from 'svelte';
 	import '@material/web/button/filled-button.js';
 	import '@material/web/button/outlined-button.js';
+	import '@material/web/button/filled-tonal-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
+	import '@material/web/iconbutton/icon-button.js';
+	import '@material/web/checkbox/checkbox.js';
+	import '@material/web/radio/radio.js';
+	import '@material/web/select/outlined-select.js';
+	import '@material/web/select/select-option.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import CloseRentalModal from '$lib/components/CloseRentalModal.svelte';
 	import GuideSelector from '$lib/components/GuideSelector.svelte';
@@ -274,90 +280,202 @@
 		loading = false;
 		selectedRentalToClose = null;
 	}
+
+	function getElapsedTime(startedAt: string): string {
+		const start = new Date(startedAt);
+		const now = new Date();
+		const diff = Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
+		const hours = Math.floor(diff / 60);
+		const mins = diff % 60;
+		if (hours > 0) return `${hours}h ${mins}m`;
+		return `${mins}m`;
+	}
 </script>
 
 {#if $shiftStore.isLoggedIn}
 	<div class="app-shell">
+		<!-- Top App Bar -->
 		<header class="app-header">
-			<h1>Rental Manager</h1>
-			<div class="header-right">
+			<div class="header-start">
+				<span class="material-symbols-rounded header-icon">point_of_sale</span>
+				<h1 class="md-headline-small">Rental Manager</h1>
+			</div>
+			<div class="header-end">
 				{#if error}
-					<span class="header-error">{error}</span>
+					<div class="header-error">
+						<span class="material-symbols-rounded">error</span>
+						<span class="md-body-small">{error}</span>
+					</div>
 				{/if}
-				<span class="operator-badge">{$shiftStore.operator?.name}</span>
-				<md-outlined-button onclick={handleEndShift} disabled={loading}>End Shift</md-outlined-button>
+				<div class="operator-badge">
+					<span class="material-symbols-rounded">person</span>
+					<span class="md-label-large">{$shiftStore.operator?.name}</span>
+				</div>
+				<md-outlined-button onclick={handleEndShift} disabled={loading}>
+					<span class="material-symbols-rounded" slot="icon">logout</span>
+					End Shift
+				</md-outlined-button>
 			</div>
 		</header>
 
 		<main class="app-main">
-			<section class="rentals-panel">
-				<div class="action-buttons">
-					<md-filled-button onclick={() => { showForm = true; error = ''; }}>
-						New Rental
-					</md-filled-button>
-					{#if data.storeProducts.length > 0}
-						<md-outlined-button onclick={() => { showStoreSaleModal = true; saleError = ''; }}>
-							Store Sale
-						</md-outlined-button>
-					{/if}
+			<!-- Action Bar -->
+			<div class="action-bar">
+				<md-filled-button onclick={() => { showForm = true; error = ''; }}>
+					<span class="material-symbols-rounded" slot="icon">add</span>
+					New Rental
+				</md-filled-button>
+				{#if data.storeProducts.length > 0}
+					<md-filled-tonal-button onclick={() => { showStoreSaleModal = true; saleError = ''; }}>
+						<span class="material-symbols-rounded" slot="icon">shopping_cart</span>
+						Store Sale
+					</md-filled-tonal-button>
+				{/if}
+				<div class="stats-badges">
+					<div class="stat-badge active">
+						<span class="material-symbols-rounded">pending</span>
+						<span class="md-label-medium">{data.rentals.length} Active</span>
+					</div>
+					<div class="stat-badge previous">
+						<span class="material-symbols-rounded">history</span>
+						<span class="md-label-medium">{data.previousShiftRentals.length} Previous</span>
+					</div>
+				</div>
+			</div>
+
+			<!-- Active Rentals Section -->
+			<section class="rentals-section">
+				<div class="section-header">
+					<span class="material-symbols-rounded">schedule</span>
+					<h2 class="md-title-large">Active Rentals</h2>
+					<span class="count-badge md-label-medium">{data.rentals.length}</span>
 				</div>
 
-				<h2>Active Rentals</h2>
 				{#if data.rentals.length === 0}
-					<p>No active rentals</p>
+					<div class="empty-state">
+						<span class="material-symbols-rounded">event_available</span>
+						<p class="md-body-large">No active rentals</p>
+						<p class="md-body-medium">Click "New Rental" to get started</p>
+					</div>
 				{:else}
-					<div class="rentals-list">
+					<div class="rentals-grid">
 						{#each data.rentals as rental}
 							{@const customer = rental.customer as {name?: string, hotel?: string}}
 							{@const items = rental.items as Array<{name: string, quantity?: number, code?: string}>}
 							{@const pricing = rental.pricing as {type?: string}}
 							<div class="rental-card">
-								<div class="rental-customer">
-									{customer?.name || 'Unknown'}
-									{#if customer?.hotel}
-										<span class="hotel-name">@ {customer.hotel}</span>
-									{/if}
+								<div class="rental-header">
+									<div class="customer-info">
+										<span class="material-symbols-rounded customer-icon">person</span>
+										<div class="customer-details">
+											<span class="md-title-medium">{customer?.name || 'Unknown'}</span>
+											{#if customer?.hotel}
+												<span class="md-body-small hotel-text">
+													<span class="material-symbols-rounded icon-xs">hotel</span>
+													{customer.hotel}
+												</span>
+											{/if}
+										</div>
+									</div>
+									<div class="rental-type-badge" class:hourly={pricing.type === 'hourly'} class:fullday={pricing.type !== 'hourly'}>
+										{pricing.type === 'hourly' ? 'Hourly' : 'Full Day'}
+									</div>
 								</div>
-								<div class="rental-items">
-									{items.map(i => i.name + (i.code ? ` (${i.code})` : '') + (i.quantity ? ` x${i.quantity}` : '')).join(', ')}
+
+								<div class="rental-items-list">
+									{#each items as item}
+										<div class="item-chip">
+											<span class="material-symbols-rounded icon-sm">
+												{item.code ? 'qr_code_2' : 'inventory_2'}
+											</span>
+											<span class="md-body-small">
+												{item.name}{item.code ? ` (${item.code})` : ''}{item.quantity ? ` x${item.quantity}` : ''}
+											</span>
+										</div>
+									{/each}
 								</div>
-								<div class="rental-type">{pricing.type === 'hourly' ? 'Hourly' : 'Full Day'}</div>
-								<div class="rental-time">Started: {new Date(rental.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-								<button class="close-btn" onclick={() => promptCloseRental(rental.id)} disabled={loading}>Close Rental</button>
+
+								<div class="rental-footer">
+									<div class="time-info">
+										<span class="material-symbols-rounded icon-sm">schedule</span>
+										<span class="md-body-small">Started {new Date(rental.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+										<span class="elapsed-badge">{getElapsedTime(rental.startedAt)}</span>
+									</div>
+									<md-filled-tonal-button onclick={() => promptCloseRental(rental.id)} disabled={loading}>
+										<span class="material-symbols-rounded" slot="icon">check_circle</span>
+										Close Rental
+									</md-filled-tonal-button>
+								</div>
 							</div>
 						{/each}
 					</div>
 				{/if}
+			</section>
 
-				<h2 style="margin-top: 2rem;">Previous Shift Rentals</h2>
+			<!-- Previous Shift Rentals Section -->
+			<section class="rentals-section previous-section">
+				<div class="section-header">
+					<span class="material-symbols-rounded">history</span>
+					<h2 class="md-title-large">Previous Shift Rentals</h2>
+					<span class="count-badge md-label-medium">{data.previousShiftRentals.length}</span>
+				</div>
+
 				{#if data.previousShiftRentals.length === 0}
-					<p>No previous rentals</p>
+					<div class="empty-state compact">
+						<span class="material-symbols-rounded">folder_off</span>
+						<p class="md-body-medium">No previous rentals</p>
+					</div>
 				{:else}
-					<div class="rentals-list">
+					<div class="rentals-grid previous">
 						{#each data.previousShiftRentals as rental}
 							{@const customer = rental.customer as {name?: string, hotel?: string}}
 							{@const items = rental.items as Array<{name: string, quantity?: number, code?: string}>}
-							{@const pricing = rental.pricing as {type?: string}}
+							{@const pricing = rental.pricing as {type?: string, total?: number}}
 							<div class="rental-card completed">
-								<div class="rental-customer">
-									{customer?.name || 'Unknown'}
-									{#if customer?.hotel}
-										<span class="hotel-name">@ {customer.hotel}</span>
+								<div class="rental-header">
+									<div class="customer-info">
+										<span class="material-symbols-rounded customer-icon">person</span>
+										<div class="customer-details">
+											<span class="md-title-medium">{customer?.name || 'Unknown'}</span>
+											{#if customer?.hotel}
+												<span class="md-body-small hotel-text">
+													<span class="material-symbols-rounded icon-xs">hotel</span>
+													{customer.hotel}
+												</span>
+											{/if}
+										</div>
+									</div>
+									{#if pricing?.total}
+										<div class="price-badge">
+											${(pricing.total / 100).toFixed(2)}
+										</div>
 									{/if}
 								</div>
-								<div class="rental-items">
-									{items.map(i => i.name + (i.code ? ` (${i.code})` : '') + (i.quantity ? ` x${i.quantity}` : '')).join(', ')}
+
+								<div class="rental-items-list compact">
+									{#each items as item}
+										<span class="item-text md-body-small">
+											{item.name}{item.code ? ` (${item.code})` : ''}{item.quantity ? ` x${item.quantity}` : ''}
+										</span>
+									{/each}
 								</div>
-								<div class="rental-type">{pricing.type === 'hourly' ? 'Hourly' : 'Full Day'}</div>
-								<div class="rental-time">
-									Rented: {new Date(rental.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+
+								<div class="rental-times">
+									<div class="time-row">
+										<span class="material-symbols-rounded icon-xs">schedule</span>
+										<span class="md-body-small">
+											{new Date(rental.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+										</span>
+									</div>
 									{#if rental.returnedAt}
-										→ Returned: {new Date(rental.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+										<div class="time-row returned">
+											<span class="material-symbols-rounded icon-xs">check_circle</span>
+											<span class="md-body-small">
+												{new Date(rental.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+											</span>
+										</div>
 									{/if}
 								</div>
-								{#if pricing.total}
-									<div class="rental-price">${(pricing.total / 100).toFixed(2)}</div>
-								{/if}
 							</div>
 						{/each}
 					</div>
@@ -365,236 +483,392 @@
 			</section>
 		</main>
 
+		<!-- Create Rental Modal -->
 		{#if showForm}
 			<div class="modal-overlay" onclick={resetForm}>
-				<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+				<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
 					<div class="modal-header">
-						<h2>Create Rental</h2>
-						<button class="close-modal" onclick={resetForm}>x</button>
+						<div class="modal-title">
+							<span class="material-symbols-rounded">add_shopping_cart</span>
+							<h2 class="md-headline-small">Create Rental</h2>
+						</div>
+						<md-icon-button onclick={resetForm}>
+							<span class="material-symbols-rounded">close</span>
+						</md-icon-button>
 					</div>
 
-					<div class="form-section">
-						<label>Product</label>
-						<select bind:value={selectedProductId} disabled={loading}>
-							<option value={null}>Select a rental product...</option>
-							{#each data.products as product}
-								<option value={product.id}>{product.name}</option>
-							{/each}
-						</select>
-					</div>
-
-					<div class="form-section">
-						<label>Quantity</label>
-						<input
-							type="number"
-							min="1"
-							max="10"
-							bind:value={rentalQuantity}
-							disabled={loading}
-							style="width: 100%; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px;"
-						/>
-						<p style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.25rem;">
-							Number of {selectedProduct?.name || 'rentals'}
-						</p>
-					</div>
-
-					{#if selectedProduct}
+					<div class="modal-body">
+						<!-- Product Selection -->
 						<div class="form-section">
-							<h3>Equipment</h3>
-							{#each productEquipment as item}
-								{#if item.type === 'tracked'}
-									<div class="equipment-item">
-										<label>{item.name} (need {rentalQuantity})</label>
-										<input
-											type="text"
-											placeholder="Search by code..."
-											value={searchQueries[item.categoryId ?? 0] || ''}
-											oninput={(e) => searchQueries[item.categoryId ?? 0] = e.currentTarget.value}
-											class="search-input"
-										/>
-										{#if getFilteredTrackedItems(item.categoryId ?? 0).length > 0}
-											<div class="tracked-list">
-												{#each getFilteredTrackedItems(item.categoryId ?? 0) as available}
-													<div
-														class="tracked-option"
-														onclick={() => {
-															const ids = selectedTrackedItems[item.categoryId ?? 0] || [];
-															if (ids.includes(available.id)) {
-																selectedTrackedItems[item.categoryId ?? 0] = ids.filter(id => id !== available.id);
-															} else if (ids.length < rentalQuantity) {
-																selectedTrackedItems[item.categoryId ?? 0] = [...ids, available.id];
-															}
-															selectedTrackedItems = selectedTrackedItems;
-														}}
-													>
-														<span class:selected-tracked={selectedTrackedItems[item.categoryId ?? 0]?.includes(available.id)}>
-															{available.code} {selectedTrackedItems[item.categoryId ?? 0]?.includes(available.id) ? '✓' : ''}
+							<label class="form-label">
+								<span class="material-symbols-rounded">category</span>
+								<span class="md-title-small">Select Product</span>
+							</label>
+							<select class="form-select" bind:value={selectedProductId} disabled={loading}>
+								<option value={null}>Choose a rental product...</option>
+								{#each data.products as product}
+									<option value={product.id}>{product.name}</option>
+								{/each}
+							</select>
+						</div>
+
+						<!-- Quantity -->
+						<div class="form-section">
+							<label class="form-label">
+								<span class="material-symbols-rounded">numbers</span>
+								<span class="md-title-small">Quantity</span>
+							</label>
+							<div class="quantity-control">
+								<button class="qty-btn" onclick={() => rentalQuantity = Math.max(1, rentalQuantity - 1)} disabled={loading || rentalQuantity <= 1}>
+									<span class="material-symbols-rounded">remove</span>
+								</button>
+								<span class="qty-value md-title-large">{rentalQuantity}</span>
+								<button class="qty-btn" onclick={() => rentalQuantity = Math.min(10, rentalQuantity + 1)} disabled={loading || rentalQuantity >= 10}>
+									<span class="material-symbols-rounded">add</span>
+								</button>
+							</div>
+							<p class="form-hint md-body-small">Number of {selectedProduct?.name || 'rentals'}</p>
+						</div>
+
+						{#if selectedProduct}
+							<!-- Equipment Selection -->
+							<div class="form-section">
+								<label class="form-label">
+									<span class="material-symbols-rounded">handyman</span>
+									<span class="md-title-small">Equipment</span>
+								</label>
+								<div class="equipment-list">
+									{#each productEquipment as item}
+										{#if item.type === 'tracked'}
+											<div class="equipment-card tracked">
+												<div class="equipment-header">
+													<span class="material-symbols-rounded">qr_code_2</span>
+													<span class="md-body-medium">{item.name}</span>
+													<span class="need-badge">need {rentalQuantity}</span>
+												</div>
+												<input
+													type="text"
+													placeholder="Search by code..."
+													value={searchQueries[item.categoryId ?? 0] || ''}
+													oninput={(e) => searchQueries[item.categoryId ?? 0] = e.currentTarget.value}
+													class="search-input"
+												/>
+												{#if getFilteredTrackedItems(item.categoryId ?? 0).length > 0}
+													<div class="tracked-items-grid">
+														{#each getFilteredTrackedItems(item.categoryId ?? 0) as available}
+															{@const isSelected = selectedTrackedItems[item.categoryId ?? 0]?.includes(available.id)}
+															<button
+																class="tracked-item-btn"
+																class:selected={isSelected}
+																onclick={() => {
+																	const ids = selectedTrackedItems[item.categoryId ?? 0] || [];
+																	if (ids.includes(available.id)) {
+																		selectedTrackedItems[item.categoryId ?? 0] = ids.filter(id => id !== available.id);
+																	} else if (ids.length < rentalQuantity) {
+																		selectedTrackedItems[item.categoryId ?? 0] = [...ids, available.id];
+																	}
+																	selectedTrackedItems = selectedTrackedItems;
+																}}
+																disabled={!isSelected && (selectedTrackedItems[item.categoryId ?? 0]?.length ?? 0) >= rentalQuantity}
+															>
+																<span class="material-symbols-rounded">{isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+																<span class="md-label-large">{available.code}</span>
+															</button>
+														{/each}
+													</div>
+												{:else}
+													<p class="no-items md-body-small">No items available</p>
+												{/if}
+												{#if (selectedTrackedItems[item.categoryId ?? 0] || []).length > 0}
+													<div class="selected-summary">
+														<span class="material-symbols-rounded">check</span>
+														<span class="md-body-small">
+															Selected ({(selectedTrackedItems[item.categoryId ?? 0] || []).length}/{rentalQuantity}):
+															{(selectedTrackedItems[item.categoryId ?? 0] || [])
+																.map(id => data.trackedItems.find(t => t.id === id)?.code)
+																.join(', ')}
 														</span>
 													</div>
-												{/each}
+												{/if}
+											</div>
+										{:else}
+											{@const available = getCategoryAvailability(item.categoryId ?? 0)}
+											{@const needed = (item.quantity ?? 1) * rentalQuantity}
+											{@const canInclude = available >= needed}
+											<div class="equipment-card generic" class:unavailable={!canInclude}>
+												<label class="generic-checkbox">
+													<md-checkbox
+														checked={includedGenericItems[item.categoryId ?? 0] && canInclude}
+														onchange={(e: Event) => includedGenericItems[item.categoryId ?? 0] = (e.target as HTMLInputElement).checked}
+														disabled={!canInclude}
+													></md-checkbox>
+													<span class="material-symbols-rounded">inventory_2</span>
+													<span class="md-body-medium">{item.name} x{needed}</span>
+													{#if !canInclude}
+														<span class="stock-warning">
+															<span class="material-symbols-rounded icon-xs">warning</span>
+															Only {available} available
+														</span>
+													{/if}
+												</label>
 											</div>
 										{/if}
-										{#if (selectedTrackedItems[item.categoryId ?? 0] || []).length > 0}
-											<p class="selected-item">
-												Selected ({(selectedTrackedItems[item.categoryId ?? 0] || []).length}/{rentalQuantity}):
-												{(selectedTrackedItems[item.categoryId ?? 0] || [])
-													.map(id => data.trackedItems.find(t => t.id === id)?.code)
-													.join(', ')}
-											</p>
-										{/if}
-									</div>
-								{:else}
-									{@const available = getCategoryAvailability(item.categoryId ?? 0)}
-									{@const needed = (item.quantity ?? 1) * rentalQuantity}
-									{@const canInclude = available >= needed}
-									<div class="equipment-item">
-										<label class:unavailable={!canInclude}>
-											<input
-												type="checkbox"
-												checked={includedGenericItems[item.categoryId ?? 0] && canInclude}
-												onchange={(e) => includedGenericItems[item.categoryId ?? 0] = e.currentTarget.checked}
-												disabled={!canInclude}
-											/>
-											{item.name} x{needed}
-											{#if !canInclude}
-												<span class="out-of-stock">(only {available} available)</span>
-											{/if}
-										</label>
-									</div>
-								{/if}
-							{/each}
-						</div>
-					{/if}
+									{/each}
+								</div>
+							</div>
+						{/if}
 
-					<div class="form-section">
-						<h3>Customer Info</h3>
-						<div class="customer-fields">
-							<md-outlined-text-field label="Name *" value={customerName} oninput={(e) => customerName = (e.target as HTMLInputElement).value} disabled={loading}></md-outlined-text-field>
-							<md-outlined-text-field label="Hotel" value={customerHotel} oninput={(e) => customerHotel = (e.target as HTMLInputElement).value} disabled={loading}></md-outlined-text-field>
-							<md-outlined-text-field label="Phone" value={customerPhone} oninput={(e) => customerPhone = (e.target as HTMLInputElement).value} disabled={loading}></md-outlined-text-field>
-							<md-outlined-text-field label="Customer ID" value={customerId} oninput={(e) => customerId = (e.target as HTMLInputElement).value} disabled={loading}></md-outlined-text-field>
-						</div>
-					</div>
-
-					{#if selectedProduct?.requiresGuide}
+						<!-- Customer Info -->
 						<div class="form-section">
-							<GuideSelector
-								guides={data.guides}
-								bind:selectedGuideId
-								loading={loading}
-								onVerifyPin={verifyGuidePin}
-							/>
-						</div>
-					{/if}
-
-					{#if hasHourlyOption}
-						<div class="form-section">
-							<label>Rental Type</label>
-							<div class="rental-type-options">
-								<label><input type="radio" bind:group={rentalType} value="hourly" disabled={loading} /> Hourly (${productPricing.hourly}/hr)</label>
-								{#if productPricing.fullDay}
-									<label><input type="radio" bind:group={rentalType} value="fullDay" disabled={loading} /> Full Day (${productPricing.fullDay})</label>
-								{/if}
+							<label class="form-label">
+								<span class="material-symbols-rounded">person</span>
+								<span class="md-title-small">Customer Information</span>
+							</label>
+							<div class="customer-form-grid">
+								<md-outlined-text-field
+									label="Name *"
+									value={customerName}
+									oninput={(e: Event) => customerName = (e.target as HTMLInputElement).value}
+									disabled={loading}
+								>
+									<span class="material-symbols-rounded" slot="leading-icon">badge</span>
+								</md-outlined-text-field>
+								<md-outlined-text-field
+									label="Hotel"
+									value={customerHotel}
+									oninput={(e: Event) => customerHotel = (e.target as HTMLInputElement).value}
+									disabled={loading}
+								>
+									<span class="material-symbols-rounded" slot="leading-icon">hotel</span>
+								</md-outlined-text-field>
+								<md-outlined-text-field
+									label="Phone"
+									type="tel"
+									value={customerPhone}
+									oninput={(e: Event) => customerPhone = (e.target as HTMLInputElement).value}
+									disabled={loading}
+								>
+									<span class="material-symbols-rounded" slot="leading-icon">phone</span>
+								</md-outlined-text-field>
+								<md-outlined-text-field
+									label="Customer ID"
+									value={customerId}
+									oninput={(e: Event) => customerId = (e.target as HTMLInputElement).value}
+									disabled={loading}
+								>
+									<span class="material-symbols-rounded" slot="leading-icon">id_card</span>
+								</md-outlined-text-field>
 							</div>
 						</div>
-					{/if}
 
-					{#if error}
-						<p class="error">{error}</p>
-					{/if}
+						{#if selectedProduct?.requiresGuide}
+							<div class="form-section">
+								<GuideSelector
+									guides={data.guides}
+									bind:selectedGuideId
+									loading={loading}
+									onVerifyPin={verifyGuidePin}
+								/>
+							</div>
+						{/if}
 
-					<div class="modal-actions">
+						{#if hasHourlyOption}
+							<div class="form-section">
+								<label class="form-label">
+									<span class="material-symbols-rounded">schedule</span>
+									<span class="md-title-small">Rental Type</span>
+								</label>
+								<div class="rental-type-selector">
+									<label class="type-option" class:selected={rentalType === 'hourly'}>
+										<input type="radio" bind:group={rentalType} value="hourly" disabled={loading} />
+										<span class="material-symbols-rounded">timer</span>
+										<div class="type-info">
+											<span class="md-body-medium">Hourly</span>
+											<span class="md-label-medium">${productPricing.hourly}/hr</span>
+										</div>
+									</label>
+									{#if productPricing.fullDay}
+										<label class="type-option" class:selected={rentalType === 'fullDay'}>
+											<input type="radio" bind:group={rentalType} value="fullDay" disabled={loading} />
+											<span class="material-symbols-rounded">wb_sunny</span>
+											<div class="type-info">
+												<span class="md-body-medium">Full Day</span>
+												<span class="md-label-medium">${productPricing.fullDay}</span>
+											</div>
+										</label>
+									{/if}
+								</div>
+							</div>
+						{/if}
+
+						{#if error}
+							<div class="error-banner">
+								<span class="material-symbols-rounded">error</span>
+								<span class="md-body-medium">{error}</span>
+							</div>
+						{/if}
+					</div>
+
+					<div class="modal-footer">
 						<md-outlined-button onclick={resetForm} disabled={loading}>Cancel</md-outlined-button>
-						<md-filled-button onclick={createRental} disabled={loading}>Create Rental</md-filled-button>
+						<md-filled-button onclick={createRental} disabled={loading}>
+							<span class="material-symbols-rounded" slot="icon">check</span>
+							Create Rental
+						</md-filled-button>
 					</div>
 				</div>
 			</div>
 		{/if}
 	</div>
 {:else}
-	<div class="login-container">
+	<!-- Not Logged In State -->
+	<div class="login-prompt">
 		<div class="login-card">
-			<h1>Rental Manager</h1>
-			<p>Select your profile to start a shift</p>
-			<a href="/login"><md-filled-button>Start Shift</md-filled-button></a>
+			<div class="login-icon">
+				<span class="material-symbols-rounded">point_of_sale</span>
+			</div>
+			<h1 class="md-headline-medium">Rental Manager</h1>
+			<p class="md-body-large">Select your profile to start a shift</p>
+			<a href="/login">
+				<md-filled-button>
+					<span class="material-symbols-rounded" slot="icon">login</span>
+					Start Shift
+				</md-filled-button>
+			</a>
 		</div>
 	</div>
 {/if}
 
+<!-- Shift Summary Modal -->
 {#if showShiftSummary && shiftSummary}
 	<div class="modal-overlay" onclick={() => { showShiftSummary = false; }}>
 		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
-				<h2>Shift Summary</h2>
-				<button class="close-modal" onclick={() => { showShiftSummary = false; }}>x</button>
+				<div class="modal-title">
+					<span class="material-symbols-rounded">summarize</span>
+					<h2 class="md-headline-small">Shift Summary</h2>
+				</div>
+				<md-icon-button onclick={() => { showShiftSummary = false; }}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
 			</div>
-			<div class="shift-summary-content">
-				<h3>Rentals ({shiftSummary.rentalsCount})</h3>
-				<div class="summary-stat">
-					<span class="label">Cash:</span>
-					<span class="value">${shiftSummary.rentalsCash.toFixed(2)}</span>
+
+			<div class="modal-body">
+				<div class="summary-section">
+					<div class="summary-header">
+						<span class="material-symbols-rounded">receipt_long</span>
+						<span class="md-title-medium">Rentals ({shiftSummary.rentalsCount})</span>
+					</div>
+					<div class="summary-row">
+						<span class="md-body-medium">Cash</span>
+						<span class="md-title-medium">${shiftSummary.rentalsCash.toFixed(2)}</span>
+					</div>
+					<div class="summary-row">
+						<span class="md-body-medium">Credit</span>
+						<span class="md-title-medium">${shiftSummary.rentalsCredit.toFixed(2)}</span>
+					</div>
 				</div>
-				<div class="summary-stat">
-					<span class="label">Credit:</span>
-					<span class="value">${shiftSummary.rentalsCredit.toFixed(2)}</span>
-				</div>
+
 				{#if shiftSummary.storeSalesCount > 0}
-					<h3>Store Sales ({shiftSummary.storeSalesCount})</h3>
-					<div class="summary-stat">
-						<span class="label">Total:</span>
-						<span class="value">${shiftSummary.storeSalesTotal.toFixed(2)}</span>
+					<div class="summary-section">
+						<div class="summary-header">
+							<span class="material-symbols-rounded">shopping_cart</span>
+							<span class="md-title-medium">Store Sales ({shiftSummary.storeSalesCount})</span>
+						</div>
+						<div class="summary-row">
+							<span class="md-body-medium">Total</span>
+							<span class="md-title-medium">${shiftSummary.storeSalesTotal.toFixed(2)}</span>
+						</div>
 					</div>
 				{/if}
-				<h3>Totals</h3>
-				<div class="summary-stat total">
-					<span class="label">Cash:</span>
-					<span class="value">${shiftSummary.totalCash.toFixed(2)}</span>
-				</div>
-				<div class="summary-stat total">
-					<span class="label">Credit:</span>
-					<span class="value">${shiftSummary.totalCredit.toFixed(2)}</span>
+
+				<div class="summary-section totals">
+					<div class="summary-header">
+						<span class="material-symbols-rounded">payments</span>
+						<span class="md-title-medium">Totals</span>
+					</div>
+					<div class="summary-row total">
+						<span class="md-body-medium">Cash</span>
+						<span class="md-headline-small">${shiftSummary.totalCash.toFixed(2)}</span>
+					</div>
+					<div class="summary-row total">
+						<span class="md-body-medium">Credit</span>
+						<span class="md-headline-small">${shiftSummary.totalCredit.toFixed(2)}</span>
+					</div>
 				</div>
 			</div>
-			<div class="modal-actions">
+
+			<div class="modal-footer">
 				<md-outlined-button onclick={() => { showShiftSummary = false; }}>Cancel</md-outlined-button>
-				<md-filled-button class="danger-btn" onclick={() => { showShiftSummary = false; executeEndShift(); }}>End Shift & Download Report</md-filled-button>
+				<md-filled-button class="danger-btn" onclick={() => { showShiftSummary = false; executeEndShift(); }}>
+					<span class="material-symbols-rounded" slot="icon">download</span>
+					End Shift & Download Report
+				</md-filled-button>
 			</div>
 		</div>
 	</div>
 {/if}
 
+<!-- Store Sale Modal -->
 {#if showStoreSaleModal}
 	<div class="modal-overlay" onclick={() => { showStoreSaleModal = false; }}>
 		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
-				<h2>Store Sale</h2>
-				<button class="close-modal" onclick={() => { showStoreSaleModal = false; }}>x</button>
+				<div class="modal-title">
+					<span class="material-symbols-rounded">shopping_cart</span>
+					<h2 class="md-headline-small">Store Sale</h2>
+				</div>
+				<md-icon-button onclick={() => { showStoreSaleModal = false; }}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
 			</div>
-			<div class="form-section">
-				<label>Product</label>
-				<select bind:value={selectedStoreProductId} disabled={loading}>
-					<option value={null}>Select a product...</option>
-					{#each data.storeProducts as product}
-						<option value={product.id}>{product.name} - ${(product.price / 100).toFixed(2)} ({product.quantity} in stock)</option>
-					{/each}
-				</select>
+
+			<div class="modal-body">
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">inventory_2</span>
+						<span class="md-title-small">Select Product</span>
+					</label>
+					<select class="form-select" bind:value={selectedStoreProductId} disabled={loading}>
+						<option value={null}>Choose a product...</option>
+						{#each data.storeProducts as product}
+							<option value={product.id}>
+								{product.name} - ${(product.price / 100).toFixed(2)} ({product.quantity} in stock)
+							</option>
+						{/each}
+					</select>
+				</div>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">numbers</span>
+						<span class="md-title-small">Quantity</span>
+					</label>
+					<div class="quantity-control">
+						<button class="qty-btn" onclick={() => saleQuantity = Math.max(1, saleQuantity - 1)} disabled={loading || saleQuantity <= 1}>
+							<span class="material-symbols-rounded">remove</span>
+						</button>
+						<span class="qty-value md-title-large">{saleQuantity}</span>
+						<button class="qty-btn" onclick={() => saleQuantity++} disabled={loading}>
+							<span class="material-symbols-rounded">add</span>
+						</button>
+					</div>
+				</div>
+
+				{#if saleError}
+					<div class="error-banner">
+						<span class="material-symbols-rounded">error</span>
+						<span class="md-body-medium">{saleError}</span>
+					</div>
+				{/if}
 			</div>
-			<div class="form-section">
-				<label>Quantity</label>
-				<input
-					type="number"
-					min="1"
-					bind:value={saleQuantity}
-					disabled={loading}
-					style="width: 100%; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px;"
-				/>
-			</div>
-			{#if saleError}
-				<p class="error">{saleError}</p>
-			{/if}
-			<div class="modal-actions">
+
+			<div class="modal-footer">
 				<md-outlined-button onclick={() => { showStoreSaleModal = false; }} disabled={loading}>Cancel</md-outlined-button>
-				<md-filled-button onclick={createStoreSale} disabled={loading}>Complete Sale</md-filled-button>
+				<md-filled-button onclick={createStoreSale} disabled={loading}>
+					<span class="material-symbols-rounded" slot="icon">point_of_sale</span>
+					Complete Sale
+				</md-filled-button>
 			</div>
 		</div>
 	</div>
@@ -618,59 +892,880 @@
 />
 
 <style>
-	.app-shell { display: flex; flex-direction: column; height: 100vh; }
-	.app-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; background: var(--md-sys-color-surface-container); border-bottom: 1px solid var(--md-sys-color-outline-variant); }
-	.app-header h1 { font-size: 1.5rem; font-weight: 500; color: var(--md-sys-color-on-surface); }
-	.header-right { display: flex; align-items: center; gap: 1rem; }
-	.header-error { color: var(--md-sys-color-error); font-size: 0.875rem; padding: 0.5rem; background: var(--md-sys-color-error-container); border-radius: 0.25rem; }
-	.operator-badge { padding: 0.5rem 1rem; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border-radius: 1rem; font-weight: 500; }
-	.app-main { flex: 1; overflow: hidden; }
-	.rentals-panel { padding: 1.5rem; overflow-y: auto; height: 100%; }
-	.rentals-panel h2 { margin-bottom: 1rem; font-size: 1.25rem; font-weight: 500; }
-	.action-buttons { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
-	.rentals-list { display: flex; flex-direction: column; gap: 1rem; }
-	.rental-card { padding: 1rem; background: var(--md-sys-color-surface); border: 1px solid var(--md-sys-color-outline-variant); border-radius: 0.5rem; }
-	.rental-card.completed { opacity: 0.7; border-color: var(--md-sys-color-outline); }
-	.rental-customer { font-weight: 500; margin-bottom: 0.5rem; }
-	.hotel-name { font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); }
-	.rental-items, .rental-time { font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 0.5rem; }
-	.rental-type { font-size: 0.875rem; margin-bottom: 0.5rem; }
-	.rental-price { font-size: 1.125rem; font-weight: 600; color: var(--md-sys-color-primary); margin-top: 0.5rem; }
-	.close-btn { padding: 0.5rem 1rem; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.875rem; }
-	.close-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-	.form-section { margin-bottom: 1.5rem; }
-	.form-section label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.875rem; }
-	.form-section select { width: 100%; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); }
-	.equipment-item { margin-bottom: 1rem; }
-	.search-input { width: 100%; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; }
-	.tracked-list { border: 1px solid var(--md-sys-color-outline); border-radius: 4px; max-height: 150px; overflow-y: auto; margin-top: 0.5rem; }
-	.tracked-option { padding: 0.5rem; cursor: pointer; border-bottom: 1px solid var(--md-sys-color-outline-variant); }
-	.tracked-option:hover { background: var(--md-sys-color-surface-variant); }
-	.selected-item { font-size: 0.875rem; color: var(--md-sys-color-primary); }
-	.customer-fields { display: flex; flex-direction: column; gap: 1rem; }
-	.rental-type-options { display: flex; gap: 1rem; }
-	.error { color: var(--md-sys-color-error); }
-	.unavailable { opacity: 0.5; }
-	.out-of-stock { color: var(--md-sys-color-error); font-size: 0.75rem; }
-	.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; z-index: 100; }
-	.modal-content { background: var(--md-sys-color-surface); border-radius: 1rem; padding: 2rem; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
-	.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-	.close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
-	.modal-actions { display: flex; gap: 1rem; justify-content: flex-end; }
-	.login-container { display: flex; justify-content: center; align-items: center; height: 100vh; background: var(--md-sys-color-surface-container-low); }
-	.login-card { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; padding: 3rem; background: var(--md-sys-color-surface); border-radius: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); }
-	.login-card h1 { font-size: 2rem; font-weight: 500; color: var(--md-sys-color-on-surface); }
-	.login-card p { color: var(--md-sys-color-on-surface-variant); }
-	.login-card a { text-decoration: none; }
-	.shift-summary-content { margin-bottom: 1.5rem; }
-	.shift-summary-content h3 { font-size: 0.875rem; font-weight: 600; color: var(--md-sys-color-on-surface-variant); margin: 1rem 0 0.5rem 0; text-transform: uppercase; }
-	.shift-summary-content h3:first-child { margin-top: 0; }
-	.summary-stat { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--md-sys-color-surface-container); border-radius: 0.5rem; margin-bottom: 0.5rem; }
-	.summary-stat .label { font-weight: 500; color: var(--md-sys-color-on-surface); }
-	.summary-stat .value { font-size: 1.25rem; font-weight: 600; color: var(--md-sys-color-primary); }
-	.summary-stat.total { background: var(--md-sys-color-primary-container); }
-	.summary-stat.total .label { color: var(--md-sys-color-on-primary-container); }
-	.summary-stat.total .value { color: var(--md-sys-color-on-primary-container); }
-	.danger-btn { --md-filled-button-container-color: var(--md-sys-color-error); --md-filled-button-label-text-color: var(--md-sys-color-on-error); }
-	.selected-tracked { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 500; }
+	/* App Shell */
+	.app-shell {
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
+		background: var(--md-sys-color-surface-container-lowest);
+	}
+
+	/* App Header */
+	.app-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		background: var(--md-sys-color-surface);
+		border-bottom: 1px solid var(--md-sys-color-outline-variant);
+		box-shadow: var(--md-sys-elevation-level1);
+		position: sticky;
+		top: 0;
+		z-index: 10;
+	}
+
+	.header-start {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.header-icon {
+		font-size: 32px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.header-start h1 {
+		margin: 0;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.header-end {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.header-error {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		background: var(--md-sys-color-error-container);
+		color: var(--md-sys-color-on-error-container);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	.header-error .material-symbols-rounded {
+		font-size: 18px;
+	}
+
+	.operator-badge {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-md);
+		background: var(--md-sys-color-primary-container);
+		color: var(--md-sys-color-on-primary-container);
+		border-radius: var(--md-sys-shape-corner-full);
+	}
+
+	.operator-badge .material-symbols-rounded {
+		font-size: 20px;
+	}
+
+	/* Main Content */
+	.app-main {
+		flex: 1;
+		overflow-y: auto;
+		padding: var(--md-sys-spacing-lg);
+	}
+
+	/* Action Bar */
+	.action-bar {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+		margin-bottom: var(--md-sys-spacing-lg);
+		flex-wrap: wrap;
+	}
+
+	.stats-badges {
+		display: flex;
+		gap: var(--md-sys-spacing-sm);
+		margin-left: auto;
+	}
+
+	.stat-badge {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	.stat-badge.active {
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+	}
+
+	.stat-badge.previous {
+		background: var(--md-sys-color-surface-container-high);
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.stat-badge .material-symbols-rounded {
+		font-size: 18px;
+	}
+
+	/* Rentals Section */
+	.rentals-section {
+		background: var(--md-sys-color-surface);
+		border-radius: var(--md-sys-shape-corner-large);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		overflow: hidden;
+		margin-bottom: var(--md-sys-spacing-lg);
+	}
+
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		background: var(--md-sys-color-surface-container-low);
+		border-bottom: 1px solid var(--md-sys-color-outline-variant);
+	}
+
+	.section-header .material-symbols-rounded {
+		font-size: 24px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.section-header h2 {
+		flex: 1;
+		margin: 0;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.count-badge {
+		background: var(--md-sys-color-secondary-container);
+		color: var(--md-sys-color-on-secondary-container);
+		padding: 4px 12px;
+		border-radius: var(--md-sys-shape-corner-full);
+	}
+
+	/* Rentals Grid */
+	.rentals-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+		gap: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-lg);
+	}
+
+	.rentals-grid.previous {
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	}
+
+	/* Rental Card */
+	.rental-card {
+		background: var(--md-sys-color-surface-container-low);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		padding: var(--md-sys-spacing-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+		transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.rental-card:hover {
+		box-shadow: var(--md-sys-elevation-level2);
+	}
+
+	.rental-card.completed {
+		opacity: 0.85;
+		background: var(--md-sys-color-surface);
+	}
+
+	.rental-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.customer-info {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.customer-icon {
+		font-size: 24px;
+		color: var(--md-sys-color-primary);
+		background: var(--md-sys-color-primary-container);
+		padding: 8px;
+		border-radius: var(--md-sys-shape-corner-full);
+	}
+
+	.customer-details {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.customer-details .md-title-medium {
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.hotel-text {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.rental-type-badge {
+		padding: 4px 12px;
+		border-radius: var(--md-sys-shape-corner-full);
+		font: var(--md-sys-typescale-label-medium);
+	}
+
+	.rental-type-badge.hourly {
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+	}
+
+	.rental-type-badge.fullday {
+		background: var(--md-sys-color-secondary-container);
+		color: var(--md-sys-color-on-secondary-container);
+	}
+
+	.price-badge {
+		background: var(--md-sys-color-primary);
+		color: var(--md-sys-color-on-primary);
+		padding: 4px 12px;
+		border-radius: var(--md-sys-shape-corner-full);
+		font: var(--md-sys-typescale-title-medium);
+		font-weight: 600;
+	}
+
+	.rental-items-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.rental-items-list.compact {
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.item-chip {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 10px;
+		background: var(--md-sys-color-surface-container-high);
+		border-radius: var(--md-sys-shape-corner-small);
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.item-text {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.rental-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-top: auto;
+		padding-top: var(--md-sys-spacing-sm);
+		border-top: 1px solid var(--md-sys-color-outline-variant);
+	}
+
+	.time-info {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.elapsed-badge {
+		padding: 2px 8px;
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		font: var(--md-sys-typescale-label-small);
+		font-weight: 500;
+	}
+
+	.rental-times {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.time-row {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.time-row.returned {
+		color: var(--md-sys-color-success);
+	}
+
+	/* Icon Sizes */
+	.icon-xs {
+		font-size: 14px;
+	}
+
+	.icon-sm {
+		font-size: 18px;
+	}
+
+	/* Empty State */
+	.empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-xxl);
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.empty-state.compact {
+		padding: var(--md-sys-spacing-xl);
+	}
+
+	.empty-state .material-symbols-rounded {
+		font-size: 48px;
+		opacity: 0.5;
+	}
+
+	.empty-state p {
+		margin: 0;
+		text-align: center;
+	}
+
+	/* Login Prompt */
+	.login-prompt {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		min-height: 100vh;
+		background: linear-gradient(135deg, var(--md-sys-color-primary-container) 0%, var(--md-sys-color-surface) 100%);
+		padding: var(--md-sys-spacing-lg);
+	}
+
+	.login-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--md-sys-spacing-lg);
+		padding: var(--md-sys-spacing-xxl);
+		background: var(--md-sys-color-surface);
+		border-radius: var(--md-sys-shape-corner-extra-large);
+		box-shadow: var(--md-sys-elevation-level3);
+		text-align: center;
+		animation: md-animate-scale-in 0.3s var(--md-sys-motion-easing-emphasized-decelerate);
+	}
+
+	.login-icon {
+		width: 80px;
+		height: 80px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--md-sys-color-primary-container);
+		border-radius: var(--md-sys-shape-corner-full);
+	}
+
+	.login-icon .material-symbols-rounded {
+		font-size: 40px;
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.login-card h1 {
+		margin: 0;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.login-card p {
+		margin: 0;
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.login-card a {
+		text-decoration: none;
+	}
+
+	/* Modal Styles */
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		z-index: 100;
+		padding: var(--md-sys-spacing-md);
+		animation: md-animate-fade-in 0.2s var(--md-sys-motion-easing-standard);
+	}
+
+	.modal-content {
+		background: var(--md-sys-color-surface);
+		border-radius: var(--md-sys-shape-corner-extra-large);
+		max-width: 500px;
+		width: 100%;
+		max-height: 90vh;
+		overflow-y: auto;
+		animation: md-animate-scale-in 0.3s var(--md-sys-motion-easing-emphasized-decelerate);
+	}
+
+	.modal-content.large {
+		max-width: 700px;
+	}
+
+	.modal-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--md-sys-spacing-lg);
+		border-bottom: 1px solid var(--md-sys-color-outline-variant);
+		position: sticky;
+		top: 0;
+		background: var(--md-sys-color-surface);
+		z-index: 1;
+	}
+
+	.modal-title {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.modal-title .material-symbols-rounded {
+		font-size: 28px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.modal-title h2 {
+		margin: 0;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.modal-body {
+		padding: var(--md-sys-spacing-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-lg);
+	}
+
+	.modal-footer {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-lg);
+		border-top: 1px solid var(--md-sys-color-outline-variant);
+		position: sticky;
+		bottom: 0;
+		background: var(--md-sys-color-surface);
+	}
+
+	/* Form Styles */
+	.form-section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.form-label {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.form-label .material-symbols-rounded {
+		font-size: 20px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.form-select {
+		width: 100%;
+		padding: var(--md-sys-spacing-md);
+		border: 1px solid var(--md-sys-color-outline);
+		border-radius: var(--md-sys-shape-corner-small);
+		background: var(--md-sys-color-surface);
+		color: var(--md-sys-color-on-surface);
+		font: var(--md-sys-typescale-body-large);
+		cursor: pointer;
+	}
+
+	.form-select:focus {
+		outline: none;
+		border-color: var(--md-sys-color-primary);
+		border-width: 2px;
+	}
+
+	.form-hint {
+		color: var(--md-sys-color-on-surface-variant);
+		margin: 0;
+	}
+
+	/* Quantity Control */
+	.quantity-control {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.qty-btn {
+		width: 48px;
+		height: 48px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--md-sys-color-surface-container-high);
+		border: none;
+		border-radius: var(--md-sys-shape-corner-full);
+		color: var(--md-sys-color-on-surface);
+		cursor: pointer;
+		transition: background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.qty-btn:hover:not(:disabled) {
+		background: var(--md-sys-color-primary-container);
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.qty-btn:disabled {
+		opacity: 0.38;
+		cursor: not-allowed;
+	}
+
+	.qty-value {
+		min-width: 48px;
+		text-align: center;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	/* Customer Form Grid */
+	.customer-form-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.customer-form-grid md-outlined-text-field {
+		width: 100%;
+	}
+
+	/* Equipment List */
+	.equipment-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.equipment-card {
+		background: var(--md-sys-color-surface-container-low);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		padding: var(--md-sys-spacing-md);
+	}
+
+	.equipment-card.unavailable {
+		opacity: 0.6;
+	}
+
+	.equipment-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		margin-bottom: var(--md-sys-spacing-sm);
+	}
+
+	.equipment-header .material-symbols-rounded {
+		font-size: 20px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.need-badge {
+		margin-left: auto;
+		padding: 2px 8px;
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		font: var(--md-sys-typescale-label-small);
+	}
+
+	.search-input {
+		width: 100%;
+		padding: var(--md-sys-spacing-sm);
+		border: 1px solid var(--md-sys-color-outline);
+		border-radius: var(--md-sys-shape-corner-small);
+		background: var(--md-sys-color-surface);
+		color: var(--md-sys-color-on-surface);
+		font: var(--md-sys-typescale-body-medium);
+		margin-bottom: var(--md-sys-spacing-sm);
+	}
+
+	.search-input:focus {
+		outline: none;
+		border-color: var(--md-sys-color-primary);
+	}
+
+	.tracked-items-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+		gap: var(--md-sys-spacing-xs);
+		max-height: 150px;
+		overflow-y: auto;
+	}
+
+	.tracked-item-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: var(--md-sys-spacing-sm);
+		background: var(--md-sys-color-surface);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-small);
+		cursor: pointer;
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.tracked-item-btn:hover:not(:disabled) {
+		background: var(--md-sys-color-surface-container);
+	}
+
+	.tracked-item-btn.selected {
+		background: var(--md-sys-color-primary-container);
+		border-color: var(--md-sys-color-primary);
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.tracked-item-btn:disabled {
+		opacity: 0.38;
+		cursor: not-allowed;
+	}
+
+	.tracked-item-btn .material-symbols-rounded {
+		font-size: 18px;
+	}
+
+	.no-items {
+		color: var(--md-sys-color-on-surface-variant);
+		text-align: center;
+		padding: var(--md-sys-spacing-md);
+	}
+
+	.selected-summary {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-sm);
+		background: var(--md-sys-color-primary-container);
+		color: var(--md-sys-color-on-primary-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		margin-top: var(--md-sys-spacing-sm);
+	}
+
+	.selected-summary .material-symbols-rounded {
+		font-size: 18px;
+	}
+
+	.generic-checkbox {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		cursor: pointer;
+	}
+
+	.generic-checkbox .material-symbols-rounded {
+		font-size: 20px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.stock-warning {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		margin-left: auto;
+		color: var(--md-sys-color-error);
+		font: var(--md-sys-typescale-label-small);
+	}
+
+	/* Rental Type Selector */
+	.rental-type-selector {
+		display: flex;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.type-option {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md);
+		background: var(--md-sys-color-surface-container-low);
+		border: 2px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		cursor: pointer;
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.type-option:hover {
+		background: var(--md-sys-color-surface-container);
+	}
+
+	.type-option.selected {
+		border-color: var(--md-sys-color-primary);
+		background: var(--md-sys-color-primary-container);
+	}
+
+	.type-option input {
+		display: none;
+	}
+
+	.type-option .material-symbols-rounded {
+		font-size: 24px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.type-info {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.type-info .md-label-medium {
+		color: var(--md-sys-color-primary);
+	}
+
+	/* Error Banner */
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md);
+		background: var(--md-sys-color-error-container);
+		color: var(--md-sys-color-on-error-container);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	.error-banner .material-symbols-rounded {
+		font-size: 20px;
+	}
+
+	/* Summary Styles */
+	.summary-section {
+		background: var(--md-sys-color-surface-container-low);
+		border-radius: var(--md-sys-shape-corner-medium);
+		padding: var(--md-sys-spacing-md);
+	}
+
+	.summary-section.totals {
+		background: var(--md-sys-color-primary-container);
+	}
+
+	.summary-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		margin-bottom: var(--md-sys-spacing-md);
+		padding-bottom: var(--md-sys-spacing-sm);
+		border-bottom: 1px solid var(--md-sys-color-outline-variant);
+	}
+
+	.summary-header .material-symbols-rounded {
+		font-size: 24px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.summary-section.totals .summary-header .material-symbols-rounded {
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.summary-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--md-sys-spacing-sm) 0;
+	}
+
+	.summary-row .md-body-medium {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.summary-row .md-title-medium {
+		color: var(--md-sys-color-primary);
+	}
+
+	.summary-row.total .md-headline-small {
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.summary-section.totals .summary-row .md-body-medium {
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	/* Danger Button */
+	.danger-btn {
+		--md-filled-button-container-color: var(--md-sys-color-error);
+		--md-filled-button-label-text-color: var(--md-sys-color-on-error);
+	}
+
+	/* Animations */
+	@keyframes md-animate-scale-in {
+		from {
+			opacity: 0;
+			transform: scale(0.95);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+
+	@keyframes md-animate-fade-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	/* Responsive */
+	@media (max-width: 768px) {
+		.app-header {
+			flex-direction: column;
+			gap: var(--md-sys-spacing-sm);
+			padding: var(--md-sys-spacing-sm);
+		}
+
+		.header-end {
+			width: 100%;
+			justify-content: space-between;
+		}
+
+		.action-bar {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.stats-badges {
+			margin-left: 0;
+			justify-content: center;
+		}
+
+		.rentals-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.customer-form-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.rental-type-selector {
+			flex-direction: column;
+		}
+
+		.modal-content.large {
+			max-width: 100%;
+		}
+	}
 </style>

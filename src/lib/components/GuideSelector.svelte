@@ -1,7 +1,9 @@
 <script lang="ts">
 	import '@material/web/button/filled-button.js';
 	import '@material/web/button/outlined-button.js';
+	import '@material/web/button/filled-tonal-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
+	import '@material/web/iconbutton/icon-button.js';
 
 	interface Guide {
 		id: number;
@@ -63,15 +65,31 @@
 	}
 
 	const selectedGuide = $derived(guides.find(g => g.id === selectedGuideId));
+	const pendingGuide = $derived(guides.find(g => g.id === pendingGuideId));
 </script>
 
 <div class="guide-selector">
-	<label>Assign Guide (optional)</label>
+	<div class="selector-header">
+		<span class="material-symbols-rounded">hiking</span>
+		<span class="md-title-small">Assign Guide</span>
+		<span class="md-body-small optional">(optional)</span>
+	</div>
 
 	{#if selectedGuide}
 		<div class="selected-guide">
-			<span>{selectedGuide.name}</span>
-			<button onclick={() => (selectedGuideId = null)} disabled={loading}>Clear</button>
+			<div class="guide-avatar">
+				<span class="material-symbols-rounded">hiking</span>
+			</div>
+			<div class="guide-info">
+				<span class="md-title-medium">{selectedGuide.name}</span>
+				<span class="status-badge assigned">
+					<span class="material-symbols-rounded icon-xs">check_circle</span>
+					Assigned
+				</span>
+			</div>
+			<md-icon-button onclick={() => (selectedGuideId = null)} disabled={loading}>
+				<span class="material-symbols-rounded">close</span>
+			</md-icon-button>
 		</div>
 	{:else}
 		<div class="guide-list">
@@ -82,25 +100,37 @@
 					onclick={() => handleGuideSelect(guide.id)}
 					disabled={loading}
 				>
-					<span>{guide.name}</span>
+					<div class="guide-avatar small">
+						<span class="material-symbols-rounded">hiking</span>
+					</div>
+					<span class="md-body-medium">{guide.name}</span>
 					{#if guide.inCooldown}
-						<span class="cooldown-badge">{guide.minutesRemaining}min</span>
+						<div class="cooldown-badge">
+							<span class="material-symbols-rounded icon-xs">timer</span>
+							<span class="md-label-small">{guide.minutesRemaining}min</span>
+						</div>
 					{/if}
 				</button>
 			{/each}
 			{#if guides.length === 0}
-				<p style="color: var(--md-sys-color-on-surface-variant); font-size: 0.875rem;">
-					No guides available
-				</p>
+				<div class="empty-state">
+					<span class="material-symbols-rounded">person_off</span>
+					<span class="md-body-small">No guides available</span>
+				</div>
 			{/if}
 		</div>
 	{/if}
 
-	{#if showPinOverride && pendingGuideId}
-		<div class="pin-override">
-			<p style="font-size: 0.875rem; color: var(--md-sys-color-warning, #f5a623); margin: 0.5rem 0 1rem 0;">
-				This guide is on cooldown. Enter PIN to override.
-			</p>
+	{#if showPinOverride && pendingGuideId && pendingGuide}
+		<div class="pin-override-card">
+			<div class="override-header">
+				<span class="material-symbols-rounded warning-icon">warning</span>
+				<div class="override-info">
+					<span class="md-body-medium">{pendingGuide.name} is on cooldown</span>
+					<span class="md-body-small">Enter PIN to override</span>
+				</div>
+			</div>
+
 			<md-outlined-text-field
 				label="Guide PIN"
 				type="password"
@@ -110,15 +140,18 @@
 				value={pinInput}
 				oninput={(e: Event) => pinInput = (e.target as HTMLInputElement).value}
 				disabled={loading}
-			></md-outlined-text-field>
-			{#if pinError}
-				<p style="color: var(--md-sys-color-error); font-size: 0.875rem; margin-top: 0.5rem;">
-					{pinError}
-				</p>
-			{/if}
-			<div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-				<md-outlined-button onclick={handleCancel} disabled={loading}>Cancel</md-outlined-button>
+				error={!!pinError}
+				supporting-text={pinError || ''}
+			>
+				<span class="material-symbols-rounded" slot="leading-icon">lock</span>
+			</md-outlined-text-field>
+
+			<div class="override-actions">
+				<md-outlined-button onclick={handleCancel} disabled={loading}>
+					Cancel
+				</md-outlined-button>
 				<md-filled-button onclick={handlePinSubmit} disabled={loading || pinInput.length !== 4}>
+					<span class="material-symbols-rounded" slot="icon">check</span>
 					Verify
 				</md-filled-button>
 			</div>
@@ -128,60 +161,191 @@
 
 <style>
 	.guide-selector {
-		margin-bottom: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
 	}
-	.guide-selector label {
-		display: block;
-		margin-bottom: 0.5rem;
-		font-weight: 500;
-		font-size: 0.875rem;
+
+	.selector-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
 		color: var(--md-sys-color-on-surface);
 	}
+
+	.selector-header .material-symbols-rounded {
+		font-size: 20px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.optional {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	/* Selected Guide */
 	.selected-guide {
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
-		padding: 1rem;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md);
 		background: var(--md-sys-color-primary-container);
-		color: var(--md-sys-color-on-primary-container);
-		border-radius: 0.5rem;
+		border-radius: var(--md-sys-shape-corner-medium);
 	}
+
+	.guide-avatar {
+		width: 40px;
+		height: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+		border-radius: var(--md-sys-shape-corner-full);
+	}
+
+	.guide-avatar.small {
+		width: 32px;
+		height: 32px;
+	}
+
+	.guide-avatar .material-symbols-rounded {
+		font-size: 20px;
+	}
+
+	.guide-avatar.small .material-symbols-rounded {
+		font-size: 16px;
+	}
+
+	.guide-info {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.guide-info .md-title-medium {
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.status-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		width: fit-content;
+	}
+
+	.status-badge.assigned {
+		color: var(--md-sys-color-on-primary-container);
+		font: var(--md-sys-typescale-label-small);
+	}
+
+	/* Guide List */
 	.guide-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--md-sys-spacing-xs);
 	}
+
 	.guide-button {
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
-		padding: 0.75rem 1rem;
-		background: var(--md-sys-color-surface-container);
-		border: 1px solid var(--md-sys-color-outline);
-		border-radius: 0.5rem;
-		cursor: pointer;
-		font-size: 0.875rem;
-		color: var(--md-sys-color-on-surface);
-		transition: all 0.2s;
-	}
-	.guide-button:hover:not(:disabled) {
-		background: var(--md-sys-color-surface-container-high);
-	}
-	.guide-button.in-cooldown {
-		opacity: 0.7;
-		background: var(--md-sys-color-tertiary-container, #fce4ec);
-	}
-	.cooldown-badge {
-		font-size: 0.75rem;
-		background: var(--md-sys-color-error);
-		color: var(--md-sys-color-on-error);
-		padding: 0.25rem 0.5rem;
-		border-radius: 0.25rem;
-	}
-	.pin-override {
-		margin-top: 1rem;
-		padding: 1rem;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
 		background: var(--md-sys-color-surface-container-low);
-		border-radius: 0.5rem;
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		cursor: pointer;
+		color: var(--md-sys-color-on-surface);
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.guide-button:hover:not(:disabled) {
+		background: var(--md-sys-color-surface-container);
+		border-color: var(--md-sys-color-outline);
+	}
+
+	.guide-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.guide-button.in-cooldown {
+		background: var(--md-sys-color-warning-container);
+		border-color: var(--md-sys-color-warning);
+	}
+
+	.guide-button.in-cooldown .guide-avatar {
+		background: var(--md-sys-color-warning);
+		color: var(--md-sys-color-on-warning);
+	}
+
+	.cooldown-badge {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 8px;
+		background: var(--md-sys-color-error-container);
+		color: var(--md-sys-color-on-error-container);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	/* Empty State */
+	.empty-state {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md);
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.empty-state .material-symbols-rounded {
+		font-size: 24px;
+		opacity: 0.5;
+	}
+
+	/* PIN Override Card */
+	.pin-override-card {
+		margin-top: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md);
+		background: var(--md-sys-color-warning-container);
+		border-radius: var(--md-sys-shape-corner-medium);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.override-header {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.warning-icon {
+		font-size: 24px;
+		color: var(--md-sys-color-on-warning-container);
+	}
+
+	.override-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		color: var(--md-sys-color-on-warning-container);
+	}
+
+	.pin-override-card md-outlined-text-field {
+		width: 100%;
+		--md-outlined-text-field-container-shape: var(--md-sys-shape-corner-small);
+	}
+
+	.override-actions {
+		display: flex;
+		gap: var(--md-sys-spacing-sm);
+		justify-content: flex-end;
+	}
+
+	/* Icon Sizes */
+	.icon-xs {
+		font-size: 14px;
 	}
 </style>

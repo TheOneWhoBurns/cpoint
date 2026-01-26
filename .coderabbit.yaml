@@ -1,0 +1,68 @@
+# CodeRabbit Configuration
+# Documentation: https://docs.coderabbit.ai/
+
+language: en-US
+
+reviews:
+  # Enable automatic reviews on PRs
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+      - rental-system
+
+  # Review profile - focus on code quality and best practices
+  profile: chill
+
+  # Request changes when issues are found
+  request_changes_workflow: true
+
+  # High-level summary in PR comments
+  high_level_summary: true
+
+  # Show poem at the end of review (fun feature)
+  poem: true
+
+  # Review scope
+  path_filters:
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/*.md"
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+
+  # Code review instructions
+  path_instructions:
+    - path: "src/**/*.svelte"
+      instructions: |
+        Review Svelte components for:
+        - Proper use of Material Design 3 patterns
+        - Accessibility (ARIA labels, keyboard navigation)
+        - Svelte 5 runes usage ($state, $derived, $effect, $props)
+        - Component composition and reusability
+        - Event handling best practices
+
+    - path: "src/**/*.ts"
+      instructions: |
+        Review TypeScript files for:
+        - Type safety and proper typing
+        - API error handling
+        - Database query efficiency
+        - Security best practices
+
+    - path: "src/routes/api/**"
+      instructions: |
+        Review API routes for:
+        - Input validation
+        - Error handling and proper HTTP status codes
+        - Security (SQL injection prevention, authentication)
+        - RESTful design patterns
+
+chat:
+  # Enable chat functionality for discussions
+  auto_reply: true
+
+# Early access features
+early_access: false
