@@ -41,13 +41,23 @@
 
 	async function toggleOperator(id: string, isActive: boolean) {
 		loading = true;
-		await fetch('/api/operators', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ id, isActive: !isActive })
-		});
-		await invalidateAll();
-		loading = false;
+		try {
+			const res = await fetch('/api/operators', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id, isActive: !isActive })
+			});
+			if (res.ok) {
+				await invalidateAll();
+			} else {
+				const d = await res.json();
+				error = d.error || 'Failed to update operator';
+			}
+		} catch {
+			error = 'Network error';
+		} finally {
+			loading = false;
+		}
 	}
 </script>
 

@@ -48,15 +48,15 @@
 
 {#if open}
 	<div class="modal-overlay" onclick={handleOverlayClick}>
-		<div class="modal-content" class:danger={variant === 'danger'} class:warning={variant === 'warning'}>
+		<div class="modal-content" class:danger={variant === 'danger'} class:warning={variant === 'warning'} role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
 			<div class="modal-header">
 				<div class="modal-title">
 					<div class="icon-container" class:danger={variant === 'danger'} class:warning={variant === 'warning'}>
 						<span class="material-symbols-rounded">{iconName}</span>
 					</div>
-					<h2 class="md-headline-small">{title}</h2>
+					<h2 class="md-headline-small" id="confirm-modal-title">{title}</h2>
 				</div>
-				<md-icon-button onclick={handleCancel}>
+				<md-icon-button onclick={handleCancel} aria-label="Close">
 					<span class="material-symbols-rounded">close</span>
 				</md-icon-button>
 			</div>

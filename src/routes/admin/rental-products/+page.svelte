@@ -93,31 +93,48 @@
 
 	async function executeDeleteProduct() {
 		if (!pendingDeleteProductId) return;
-		await fetch('/api/rental-products', {
+		loading = true;
+		const res = await fetch('/api/rental-products', {
 			method: 'DELETE',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ id: pendingDeleteProductId })
 		});
-		await invalidateAll();
+		if (res.ok) {
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			error = d.error || 'Failed to delete product';
+		}
 		pendingDeleteProductId = null;
+		loading = false;
 	}
 
 	async function toggleActive(id: number, current: boolean | null) {
-		await fetch('/api/rental-products', {
+		const res = await fetch('/api/rental-products', {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ id, isActive: !current })
 		});
-		await invalidateAll();
+		if (res.ok) {
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			error = d.error || 'Failed to update product';
+		}
 	}
 
 	async function toggleRequiresGuide(id: number, current: boolean | null) {
-		await fetch('/api/rental-products', {
+		const res = await fetch('/api/rental-products', {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ id, requiresGuide: !current })
 		});
-		await invalidateAll();
+		if (res.ok) {
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			error = d.error || 'Failed to update product';
+		}
 	}
 
 	let genericQty: Record<number, string> = $state({});

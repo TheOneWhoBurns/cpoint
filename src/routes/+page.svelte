@@ -115,6 +115,7 @@
 	const selectedProduct = $derived(selectedProductId ? data.products.find(p => p.id === selectedProductId) : null);
 	const productEquipment = $derived<EquipmentItem[]>(selectedProduct?.equipment as EquipmentItem[] ?? []);
 	const productPricing = $derived<Pricing>(selectedProduct?.pricing as Pricing ?? {});
+	const selectedStoreProduct = $derived(selectedStoreProductId ? data.storeProducts.find(p => p.id === selectedStoreProductId) : null);
 	const hasHourlyOption = $derived(!!productPricing.hourly);
 
 	function initProductForm(product: typeof selectedProduct) {
@@ -519,11 +520,11 @@
 								<span class="md-title-small">Quantity</span>
 							</label>
 							<div class="quantity-control">
-								<button class="qty-btn" onclick={() => rentalQuantity = Math.max(1, rentalQuantity - 1)} disabled={loading || rentalQuantity <= 1}>
+								<button class="qty-btn" onclick={() => rentalQuantity = Math.max(1, rentalQuantity - 1)} disabled={loading || rentalQuantity <= 1} aria-label="Decrease quantity">
 									<span class="material-symbols-rounded">remove</span>
 								</button>
 								<span class="qty-value md-title-large">{rentalQuantity}</span>
-								<button class="qty-btn" onclick={() => rentalQuantity = Math.min(10, rentalQuantity + 1)} disabled={loading || rentalQuantity >= 10}>
+								<button class="qty-btn" onclick={() => rentalQuantity = Math.min(10, rentalQuantity + 1)} disabled={loading || rentalQuantity >= 10} aria-label="Increase quantity">
 									<span class="material-symbols-rounded">add</span>
 								</button>
 							</div>
@@ -570,8 +571,10 @@
 																	selectedTrackedItems = selectedTrackedItems;
 																}}
 																disabled={!isSelected && (selectedTrackedItems[item.categoryId ?? 0]?.length ?? 0) >= rentalQuantity}
+																aria-pressed={isSelected}
+																aria-label="{available.code} {isSelected ? 'selected' : 'not selected'}"
 															>
-																<span class="material-symbols-rounded">{isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+																<span class="material-symbols-rounded" aria-hidden="true">{isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
 																<span class="md-label-large">{available.code}</span>
 															</button>
 														{/each}
@@ -845,11 +848,11 @@
 						<span class="md-title-small">Quantity</span>
 					</label>
 					<div class="quantity-control">
-						<button class="qty-btn" onclick={() => saleQuantity = Math.max(1, saleQuantity - 1)} disabled={loading || saleQuantity <= 1}>
+						<button class="qty-btn" onclick={() => saleQuantity = Math.max(1, saleQuantity - 1)} disabled={loading || saleQuantity <= 1} aria-label="Decrease quantity">
 							<span class="material-symbols-rounded">remove</span>
 						</button>
 						<span class="qty-value md-title-large">{saleQuantity}</span>
-						<button class="qty-btn" onclick={() => saleQuantity++} disabled={loading}>
+						<button class="qty-btn" onclick={() => saleQuantity = Math.min(selectedStoreProduct?.quantity ?? 1, saleQuantity + 1)} disabled={loading || saleQuantity >= (selectedStoreProduct?.quantity ?? 1)} aria-label="Increase quantity">
 							<span class="material-symbols-rounded">add</span>
 						</button>
 					</div>
@@ -1618,7 +1621,20 @@
 	}
 
 	.type-option input {
-		display: none;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.type-option:has(input:focus-visible) {
+		outline: 2px solid var(--md-sys-color-primary);
+		outline-offset: 2px;
 	}
 
 	.type-option .material-symbols-rounded {

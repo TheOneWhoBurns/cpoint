@@ -128,8 +128,7 @@
 		pendingDeleteProductId = null;
 	}
 
-	// Group products by category
-	const productsByCategory = $derived(() => {
+	const productsByCategory = $derived.by(() => {
 		const grouped: Record<string, typeof data.storeProducts> = {};
 		data.storeProducts.forEach(p => {
 			const cat = p.category || 'Uncategorized';

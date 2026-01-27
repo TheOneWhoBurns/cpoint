@@ -104,7 +104,7 @@
 					<span class="material-symbols-rounded">check_circle</span>
 					<h2 class="md-headline-small">Close Rental</h2>
 				</div>
-				<md-icon-button onclick={handleCancel}>
+				<md-icon-button onclick={handleCancel} aria-label="Close">
 					<span class="material-symbols-rounded">close</span>
 				</md-icon-button>
 			</div>
@@ -184,6 +184,7 @@
 											class="qty-btn"
 											onclick={() => genericReturns[item.categoryId || 0] = Math.max(0, (genericReturns[item.categoryId || 0] || 0) - 1)}
 											disabled={loading || (genericReturns[item.categoryId || 0] || 0) <= 0}
+											aria-label="Decrease quantity for {item.name}"
 										>
 											<span class="material-symbols-rounded">remove</span>
 										</button>
@@ -192,6 +193,7 @@
 											class="qty-btn"
 											onclick={() => genericReturns[item.categoryId || 0] = Math.min(item.quantity || 1, (genericReturns[item.categoryId || 0] || 0) + 1)}
 											disabled={loading || (genericReturns[item.categoryId || 0] || 0) >= (item.quantity || 1)}
+											aria-label="Increase quantity for {item.name}"
 										>
 											<span class="material-symbols-rounded">add</span>
 										</button>
@@ -412,7 +414,20 @@
 	}
 
 	.condition-option input {
-		display: none;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.condition-option:has(input:focus-visible) {
+		outline: 2px solid var(--md-sys-color-primary);
+		outline-offset: 2px;
 	}
 
 	.condition-option:hover {
@@ -502,7 +517,20 @@
 	}
 
 	.payment-option input {
-		display: none;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.payment-option:has(input:focus-visible) {
+		outline: 2px solid var(--md-sys-color-primary);
+		outline-offset: 2px;
 	}
 
 	.payment-option:hover {

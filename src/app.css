@@ -346,7 +346,7 @@ body {
 }
 
 .md-chip:hover {
-	background-color: rgba(var(--md-sys-color-on-surface), var(--md-sys-state-hover-opacity));
+	background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
 }
 
 .md-chip-selected {

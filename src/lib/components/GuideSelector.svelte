@@ -87,7 +87,7 @@
 					Assigned
 				</span>
 			</div>
-			<md-icon-button onclick={() => (selectedGuideId = null)} disabled={loading}>
+			<md-icon-button onclick={() => (selectedGuideId = null)} disabled={loading} aria-label="Deselect guide">
 				<span class="material-symbols-rounded">close</span>
 			</md-icon-button>
 		</div>

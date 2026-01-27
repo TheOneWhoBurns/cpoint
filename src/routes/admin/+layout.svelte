@@ -86,6 +86,22 @@
 			{@render children()}
 		</main>
 	</div>
+
+	<!-- Mobile Bottom Navigation -->
+	<nav class="admin-bottomnav" aria-label="Admin navigation">
+		{#each navItems.slice(0, 5) as item}
+			<a
+				href={item.href}
+				class="bottomnav-item"
+				class:active={isActive(item.href, $page.url.pathname)}
+				aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined}
+				aria-label={item.label}
+			>
+				<span class="material-symbols-rounded" class:filled={isActive(item.href, $page.url.pathname)}>{item.icon}</span>
+				<span class="bottomnav-label md-label-small">{item.label}</span>
+			</a>
+		{/each}
+	</nav>
 </div>
 
 <style>
@@ -224,6 +240,11 @@
 		}
 	}
 
+	/* Mobile Bottom Navigation */
+	.admin-bottomnav {
+		display: none;
+	}
+
 	/* Responsive - Mobile (show bottom nav instead) */
 	@media (max-width: 768px) {
 		.admin-layout {
@@ -242,6 +263,50 @@
 
 		.admin-content {
 			padding: var(--md-sys-spacing-md);
+			padding-bottom: calc(var(--md-sys-spacing-md) + 72px);
+		}
+
+		.admin-bottomnav {
+			display: flex;
+			position: fixed;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			background: var(--md-sys-color-surface-container);
+			border-top: 1px solid var(--md-sys-color-outline-variant);
+			padding: var(--md-sys-spacing-xs) 0;
+			padding-bottom: max(var(--md-sys-spacing-xs), env(safe-area-inset-bottom));
+			z-index: 100;
+			justify-content: space-around;
+		}
+
+		.bottomnav-item {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 2px;
+			padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+			color: var(--md-sys-color-on-surface-variant);
+			text-decoration: none;
+			border-radius: var(--md-sys-shape-corner-medium);
+			min-width: 56px;
+			transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+		}
+
+		.bottomnav-item:hover {
+			background: var(--md-sys-color-surface-container-high);
+		}
+
+		.bottomnav-item.active {
+			color: var(--md-sys-color-primary);
+		}
+
+		.bottomnav-item .material-symbols-rounded {
+			font-size: 24px;
+		}
+
+		.bottomnav-label {
+			font-size: 10px;
 		}
 	}
 </style>
