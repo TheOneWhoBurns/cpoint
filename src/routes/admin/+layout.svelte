@@ -89,7 +89,7 @@
 
 	<!-- Mobile Bottom Navigation -->
 	<nav class="admin-bottomnav" aria-label="Admin navigation">
-		{#each navItems.slice(0, 5) as item}
+		{#each navItems as item}
 			<a
 				href={item.href}
 				class="bottomnav-item"

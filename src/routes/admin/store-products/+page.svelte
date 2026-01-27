@@ -67,18 +67,20 @@
 	async function updateQuantity(id: number, newQuantity: number) {
 		loading = true;
 		error = '';
-
-		const res = await fetch('/api/store-products', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ id, quantity: newQuantity })
-		});
-
-		if (res.ok) {
-			await invalidateAll();
-		} else {
-			const d = await res.json();
-			error = d.error || 'Failed to update';
+		try {
+			const res = await fetch('/api/store-products', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id, quantity: newQuantity })
+			});
+			if (res.ok) {
+				await invalidateAll();
+			} else {
+				const d = await res.json();
+				error = d.error || 'Failed to update';
+			}
+		} catch {
+			error = 'Network error';
 		}
 		loading = false;
 	}
@@ -128,15 +130,6 @@
 		pendingDeleteProductId = null;
 	}
 
-	const productsByCategory = $derived.by(() => {
-		const grouped: Record<string, typeof data.storeProducts> = {};
-		data.storeProducts.forEach(p => {
-			const cat = p.category || 'Uncategorized';
-			if (!grouped[cat]) grouped[cat] = [];
-			grouped[cat].push(p);
-		});
-		return grouped;
-	});
 </script>
 
 <div class="store-products-page">

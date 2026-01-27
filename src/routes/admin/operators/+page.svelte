@@ -21,20 +21,22 @@
 		}
 		loading = true;
 		error = '';
-
-		const res = await fetch('/api/operators', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, passcode })
-		});
-
-		if (res.ok) {
-			name = '';
-			passcode = '';
-			await invalidateAll();
-		} else {
-			const d = await res.json();
-			error = d.error || 'Failed';
+		try {
+			const res = await fetch('/api/operators', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name, passcode })
+			});
+			if (res.ok) {
+				name = '';
+				passcode = '';
+				await invalidateAll();
+			} else {
+				const d = await res.json();
+				error = d.error || 'Failed';
+			}
+		} catch {
+			error = 'Network error';
 		}
 		loading = false;
 	}

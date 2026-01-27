@@ -98,11 +98,11 @@
 
 {#if open && rental}
 	<div class="modal-overlay" onclick={handleCancel}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="close-rental-title">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">check_circle</span>
-					<h2 class="md-headline-small">Close Rental</h2>
+					<h2 class="md-headline-small" id="close-rental-title">Close Rental</h2>
 				</div>
 				<md-icon-button onclick={handleCancel} aria-label="Close">
 					<span class="material-symbols-rounded">close</span>

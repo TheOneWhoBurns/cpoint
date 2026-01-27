@@ -110,30 +110,46 @@
 	}
 
 	async function toggleActive(id: number, current: boolean | null) {
-		const res = await fetch('/api/rental-products', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ id, isActive: !current })
-		});
-		if (res.ok) {
-			await invalidateAll();
-		} else {
-			const d = await res.json();
-			error = d.error || 'Failed to update product';
+		if (loading) return;
+		loading = true;
+		try {
+			const res = await fetch('/api/rental-products', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id, isActive: !current })
+			});
+			if (res.ok) {
+				await invalidateAll();
+			} else {
+				const d = await res.json();
+				error = d.error || 'Failed to update product';
+			}
+		} catch {
+			error = 'Network error';
+		} finally {
+			loading = false;
 		}
 	}
 
 	async function toggleRequiresGuide(id: number, current: boolean | null) {
-		const res = await fetch('/api/rental-products', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ id, requiresGuide: !current })
-		});
-		if (res.ok) {
-			await invalidateAll();
-		} else {
-			const d = await res.json();
-			error = d.error || 'Failed to update product';
+		if (loading) return;
+		loading = true;
+		try {
+			const res = await fetch('/api/rental-products', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id, requiresGuide: !current })
+			});
+			if (res.ok) {
+				await invalidateAll();
+			} else {
+				const d = await res.json();
+				error = d.error || 'Failed to update product';
+			}
+		} catch {
+			error = 'Network error';
+		} finally {
+			loading = false;
 		}
 	}
 
@@ -309,6 +325,7 @@
 												oninput={(e: Event) => genericQty[cat.id] = (e.target as HTMLInputElement).value}
 												class="qty-input"
 												disabled={isSelected}
+												aria-label="Quantity for {cat.name}"
 											/>
 											<md-filled-tonal-button
 												onclick={() => addCategory(cat, parseInt(genericQty[cat.id]) || 1)}
@@ -386,6 +403,7 @@
 										class="guide-toggle"
 										class:active={product.requiresGuide}
 										onclick={() => toggleRequiresGuide(product.id, product.requiresGuide)}
+										aria-pressed={product.requiresGuide}
 									>
 										<span class="material-symbols-rounded icon-sm">
 											{product.requiresGuide ? 'check' : 'close'}
