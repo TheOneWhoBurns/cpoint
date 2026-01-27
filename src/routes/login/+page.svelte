@@ -2,11 +2,10 @@
 	import { goto } from '$app/navigation';
 	import { shiftStore } from '$lib/stores/shift';
 	import '@material/web/button/filled-button.js';
+	import '@material/web/button/outlined-button.js';
 	import '@material/web/button/text-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
-	import '@material/web/list/list.js';
-	import '@material/web/list/list-item.js';
-	import '@material/web/icon/icon.js';
+	import '@material/web/progress/circular-progress.js';
 
 	let { data } = $props();
 
@@ -63,68 +62,122 @@
 	function handleBack() {
 		selectedOperator = null;
 		passcode = '';
+		error = '';
+	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' && selectedOperator && passcode.length === 4) {
+			handleLogin();
+		}
 	}
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <div class="login-page">
-	<div class="login-container">
+	<div class="login-card md-animate-scale-in">
+		<!-- Header -->
 		<header class="login-header">
-			<h1>Start Shift</h1>
-			<p>Select your profile and enter your passcode</p>
+			<div class="logo-container">
+				<span class="material-symbols-rounded filled logo-icon">storefront</span>
+			</div>
+			<h1 class="md-headline-medium">Start Your Shift</h1>
+			<p class="md-body-medium subtitle">Select your profile and enter your passcode to begin</p>
 		</header>
 
-		<section class="operator-selection">
-			<h2>Who's working?</h2>
-			<div class="operator-grid">
-				{#each data.operators as operator}
-					<button
-						class="operator-card"
-						class:selected={selectedOperator?.id === operator.id}
-						onclick={() => selectOperator(operator)}
-					>
-						<span class="operator-avatar">{operator.name.charAt(0)}</span>
-						<span class="operator-name">{operator.name}</span>
-					</button>
-				{/each}
-				{#if data.operators.length === 0}
-					<p class="no-operators">No operators configured. Add operators in admin.</p>
-				{/if}
+		<!-- Operator Selection -->
+		<section class="operator-section" class:dimmed={selectedOperator !== null}>
+			<div class="section-header">
+				<span class="material-symbols-rounded">person</span>
+				<h2 class="md-title-medium">Who's working today?</h2>
 			</div>
+
+			{#if data.operators.length === 0}
+				<div class="empty-state">
+					<span class="material-symbols-rounded icon-lg">person_off</span>
+					<p class="md-body-medium">No operators configured</p>
+					<a href="/admin/operators" class="md-body-small">Add operators in admin panel</a>
+				</div>
+			{:else}
+				<div class="operator-grid">
+					{#each data.operators as operator}
+						<button
+							class="operator-card"
+							class:selected={selectedOperator?.id === operator.id}
+							onclick={() => selectOperator(operator)}
+							aria-label="Select operator {operator.name}"
+						>
+							<div class="avatar">
+								<span class="avatar-letter">{operator.name.charAt(0).toUpperCase()}</span>
+							</div>
+							<span class="operator-name md-label-large">{operator.name}</span>
+							{#if selectedOperator?.id === operator.id}
+								<span class="material-symbols-rounded filled check-icon">check_circle</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</section>
 
+		<!-- Passcode Entry -->
 		{#if selectedOperator}
-			<section class="passcode-section">
-				<h2>Enter passcode for {selectedOperator.name}</h2>
-				<md-outlined-text-field
-					label="4-digit passcode"
-					type="password"
-					maxlength="4"
-					pattern="[0-9]*"
-					inputmode="numeric"
-					value={passcode}
-					oninput={(e: Event) => passcode = (e.target as HTMLInputElement).value}
-				></md-outlined-text-field>
+			<section class="passcode-section md-animate-slide-up">
+				<div class="section-header">
+					<span class="material-symbols-rounded">pin</span>
+					<h2 class="md-title-medium">Enter passcode for {selectedOperator.name}</h2>
+				</div>
+
+				<div class="passcode-input-container">
+					<md-outlined-text-field
+						label="4-digit passcode"
+						type="password"
+						maxlength="4"
+						pattern="[0-9]*"
+						inputmode="numeric"
+						value={passcode}
+						oninput={(e: Event) => passcode = (e.target as HTMLInputElement).value}
+						error={!!error}
+						error-text={error}
+						supporting-text="Enter your personal 4-digit code"
+					>
+						<span class="material-symbols-rounded" slot="leading-icon">lock</span>
+					</md-outlined-text-field>
+				</div>
 
 				{#if error}
-					<p class="error-message">{error}</p>
+					<div class="error-banner">
+						<span class="material-symbols-rounded">error</span>
+						<span class="md-body-medium">{error}</span>
+					</div>
 				{/if}
 
 				<div class="actions">
-					<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-					<md-text-button onclick={handleBack}>
+					<md-outlined-button onclick={handleBack} disabled={loading}>
+						<span class="material-symbols-rounded" slot="icon">arrow_back</span>
 						Back
-					</md-text-button>
-					<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-					<md-filled-button onclick={handleLogin} disabled={loading}>
-						{loading ? 'Starting...' : 'Start Shift'}
+					</md-outlined-button>
+					<md-filled-button onclick={handleLogin} disabled={loading || passcode.length !== 4}>
+						{#if loading}
+							<md-circular-progress indeterminate aria-label="Loading"></md-circular-progress>
+						{:else}
+							<span class="material-symbols-rounded" slot="icon">login</span>
+							Start Shift
+						{/if}
 					</md-filled-button>
 				</div>
 			</section>
 		{/if}
 
-		<a href="/" class="back-link">
-			<md-text-button>Cancel</md-text-button>
-		</a>
+		<!-- Footer -->
+		<footer class="login-footer">
+			<a href="/" class="cancel-link">
+				<md-text-button>
+					<span class="material-symbols-rounded" slot="icon">close</span>
+					Cancel
+				</md-text-button>
+			</a>
+		</footer>
 	</div>
 </div>
 
@@ -134,66 +187,115 @@
 		justify-content: center;
 		align-items: center;
 		min-height: 100vh;
-		padding: 2rem;
-		background: var(--md-sys-color-surface-container-low);
+		padding: var(--md-sys-spacing-lg);
+		background: linear-gradient(
+			135deg,
+			var(--md-sys-color-surface-container-low) 0%,
+			var(--md-sys-color-surface-container) 100%
+		);
 	}
 
-	.login-container {
+	.login-card {
 		width: 100%;
-		max-width: 600px;
+		max-width: 560px;
 		display: flex;
 		flex-direction: column;
-		gap: 2rem;
-		padding: 2rem;
+		gap: var(--md-sys-spacing-lg);
+		padding: var(--md-sys-spacing-xl);
 		background: var(--md-sys-color-surface);
-		border-radius: 1.5rem;
-		box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+		border-radius: var(--md-sys-shape-corner-extra-large);
+		box-shadow: var(--md-sys-elevation-level3);
 	}
 
+	/* Header */
 	.login-header {
 		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.logo-container {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		width: 72px;
+		height: 72px;
+		background: var(--md-sys-color-primary-container);
+		border-radius: var(--md-sys-shape-corner-large);
+		margin-bottom: var(--md-sys-spacing-sm);
+	}
+
+	.logo-icon {
+		font-size: 36px;
+		color: var(--md-sys-color-on-primary-container);
 	}
 
 	.login-header h1 {
-		font-size: 1.75rem;
-		font-weight: 500;
 		color: var(--md-sys-color-on-surface);
+		margin: 0;
 	}
 
-	.login-header p {
-		margin-top: 0.5rem;
+	.subtitle {
 		color: var(--md-sys-color-on-surface-variant);
+		margin: 0;
 	}
 
-	.operator-selection h2,
-	.passcode-section h2 {
-		font-size: 1rem;
-		font-weight: 500;
-		margin-bottom: 1rem;
+	/* Section Header */
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		margin-bottom: var(--md-sys-spacing-md);
 		color: var(--md-sys-color-on-surface);
+	}
+
+	.section-header h2 {
+		margin: 0;
+	}
+
+	.section-header .material-symbols-rounded {
+		color: var(--md-sys-color-primary);
+	}
+
+	/* Operator Section */
+	.operator-section {
+		transition: opacity var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+	}
+
+	.operator-section.dimmed {
+		opacity: 0.6;
 	}
 
 	.operator-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-		gap: 1rem;
+		grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+		gap: var(--md-sys-spacing-md);
 	}
 
 	.operator-card {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 1.5rem 1rem;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md);
 		background: var(--md-sys-color-surface-container);
 		border: 2px solid transparent;
-		border-radius: 1rem;
+		border-radius: var(--md-sys-shape-corner-medium);
 		cursor: pointer;
-		transition: all 0.2s ease;
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 	}
 
 	.operator-card:hover {
 		background: var(--md-sys-color-surface-container-high);
+		transform: translateY(-2px);
+		box-shadow: var(--md-sys-elevation-level1);
+	}
+
+	.operator-card:active {
+		transform: translateY(0);
 	}
 
 	.operator-card.selected {
@@ -201,62 +303,145 @@
 		background: var(--md-sys-color-primary-container);
 	}
 
-	.operator-avatar {
+	.avatar {
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		width: 3rem;
-		height: 3rem;
+		width: 48px;
+		height: 48px;
 		background: var(--md-sys-color-primary);
 		color: var(--md-sys-color-on-primary);
-		border-radius: 50%;
-		font-size: 1.25rem;
-		font-weight: 500;
+		border-radius: var(--md-sys-shape-corner-full);
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 	}
 
-	.operator-card.selected .operator-avatar {
+	.operator-card.selected .avatar {
 		background: var(--md-sys-color-on-primary-container);
 		color: var(--md-sys-color-primary-container);
 	}
 
-	.operator-name {
-		font-size: 0.875rem;
+	.avatar-letter {
+		font-size: 1.25rem;
 		font-weight: 500;
+	}
+
+	.operator-name {
 		color: var(--md-sys-color-on-surface);
-	}
-
-	.no-operators {
-		grid-column: 1 / -1;
 		text-align: center;
-		color: var(--md-sys-color-on-surface-variant);
-		padding: 2rem;
 	}
 
+	.operator-card.selected .operator-name {
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.check-icon {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		font-size: 20px;
+		color: var(--md-sys-color-primary);
+	}
+
+	/* Empty State */
+	.empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-xl);
+		color: var(--md-sys-color-on-surface-variant);
+		text-align: center;
+	}
+
+	.empty-state .material-symbols-rounded {
+		font-size: 48px;
+		opacity: 0.5;
+	}
+
+	.empty-state a {
+		color: var(--md-sys-color-primary);
+		text-decoration: none;
+	}
+
+	.empty-state a:hover {
+		text-decoration: underline;
+	}
+
+	/* Passcode Section */
 	.passcode-section {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--md-sys-spacing-md);
+		padding-top: var(--md-sys-spacing-md);
+		border-top: 1px solid var(--md-sys-color-outline-variant);
 	}
 
-	.passcode-section md-outlined-text-field {
+	.passcode-input-container {
 		width: 100%;
 	}
 
-	.error-message {
-		color: var(--md-sys-color-error);
-		font-size: 0.875rem;
+	.passcode-input-container md-outlined-text-field {
+		width: 100%;
+		--md-outlined-text-field-container-shape: var(--md-sys-shape-corner-small);
 	}
 
+	/* Error Banner */
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		background: var(--md-sys-color-error-container);
+		color: var(--md-sys-color-on-error-container);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	.error-banner .material-symbols-rounded {
+		font-size: 20px;
+	}
+
+	/* Actions */
 	.actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 0.5rem;
+		gap: var(--md-sys-spacing-sm);
+		margin-top: var(--md-sys-spacing-sm);
 	}
 
-	.back-link {
+	.actions md-filled-button {
+		--md-filled-button-container-color: var(--md-sys-color-primary);
+		--md-filled-button-label-text-color: var(--md-sys-color-on-primary);
+	}
+
+	.actions md-outlined-button {
+		--md-outlined-button-outline-color: var(--md-sys-color-outline);
+	}
+
+	.actions md-circular-progress {
+		--md-circular-progress-size: 20px;
+		--md-circular-progress-active-indicator-color: var(--md-sys-color-on-primary);
+	}
+
+	/* Footer */
+	.login-footer {
 		display: flex;
 		justify-content: center;
+		padding-top: var(--md-sys-spacing-md);
+		border-top: 1px solid var(--md-sys-color-outline-variant);
+	}
+
+	.cancel-link {
 		text-decoration: none;
+	}
+
+	/* Responsive */
+	@media (max-width: 480px) {
+		.login-card {
+			padding: var(--md-sys-spacing-lg);
+		}
+
+		.operator-grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
 	}
 </style>

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import '@material/web/button/filled-button.js';
 	import '@material/web/button/outlined-button.js';
+	import '@material/web/iconbutton/icon-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
+	import '@material/web/radio/radio.js';
 
 	interface RentalItem {
 		type: string;
@@ -82,104 +84,168 @@
 			});
 		}
 	});
+
+	function getElapsedTime(startedAt: string): string {
+		const start = new Date(startedAt);
+		const now = new Date();
+		const diff = Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
+		const hours = Math.floor(diff / 60);
+		const mins = diff % 60;
+		if (hours > 0) return `${hours}h ${mins}m`;
+		return `${mins}m`;
+	}
 </script>
 
 {#if open && rental}
 	<div class="modal-overlay" onclick={handleCancel}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="close-rental-title">
 			<div class="modal-header">
-				<h2>Close Rental</h2>
-				<button class="close-modal" onclick={handleCancel}>x</button>
+				<div class="modal-title">
+					<span class="material-symbols-rounded">check_circle</span>
+					<h2 class="md-headline-small" id="close-rental-title">Close Rental</h2>
+				</div>
+				<md-icon-button onclick={handleCancel} aria-label="Close">
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
 			</div>
 
-			<div class="rental-summary">
-				<p><strong>Customer:</strong> {rental.customer?.name || 'Unknown'}</p>
-				<p><strong>Started:</strong> {new Date(rental.startedAt).toLocaleString()}</p>
-			</div>
+			<div class="modal-body">
+				<!-- Rental Summary Card -->
+				<div class="rental-summary-card">
+					<div class="summary-row">
+						<span class="material-symbols-rounded icon-sm">person</span>
+						<span class="md-title-medium">{rental.customer?.name || 'Unknown'}</span>
+					</div>
+					<div class="summary-row">
+						<span class="material-symbols-rounded icon-sm">schedule</span>
+						<span class="md-body-medium">Started {new Date(rental.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+						<span class="elapsed-badge">{getElapsedTime(rental.startedAt)}</span>
+					</div>
+				</div>
 
-			<div class="section">
-				<h3>Equipment Condition</h3>
-				{#each rental.items as item}
-					{#if item.type === 'tracked'}
-						<div class="condition-item">
-							<label>{item.name} ({item.code})</label>
-							<div class="condition-options">
-								<label>
-									<input
-										type="radio"
-										bind:group={trackedConditions[item.itemId || 0]}
-										value="good"
-										disabled={loading}
-									/>
-									Good ✓
-								</label>
-								<label>
-									<input
-										type="radio"
-										bind:group={trackedConditions[item.itemId || 0]}
-										value="damaged"
-										disabled={loading}
-									/>
-									Damaged ⚠
-								</label>
-								<label>
-									<input
-										type="radio"
-										bind:group={trackedConditions[item.itemId || 0]}
-										value="missing"
-										disabled={loading}
-									/>
-									Missing ✗
-								</label>
+				<!-- Equipment Condition Section -->
+				<div class="section">
+					<div class="section-header">
+						<span class="material-symbols-rounded">handyman</span>
+						<span class="md-title-small">Equipment Condition</span>
+					</div>
+
+					{#each rental.items as item}
+						{#if item.type === 'tracked'}
+							<div class="condition-card">
+								<div class="item-header">
+									<span class="material-symbols-rounded icon-sm">qr_code_2</span>
+									<span class="md-body-medium">{item.name}</span>
+									<code class="item-code">{item.code}</code>
+								</div>
+								<div class="condition-options">
+									<label class="condition-option" class:selected={trackedConditions[item.itemId || 0] === 'good'}>
+										<input
+											type="radio"
+											bind:group={trackedConditions[item.itemId || 0]}
+											value="good"
+											disabled={loading}
+										/>
+										<span class="material-symbols-rounded good">check_circle</span>
+										<span class="md-label-medium">Good</span>
+									</label>
+									<label class="condition-option" class:selected={trackedConditions[item.itemId || 0] === 'damaged'}>
+										<input
+											type="radio"
+											bind:group={trackedConditions[item.itemId || 0]}
+											value="damaged"
+											disabled={loading}
+										/>
+										<span class="material-symbols-rounded damaged">warning</span>
+										<span class="md-label-medium">Damaged</span>
+									</label>
+									<label class="condition-option" class:selected={trackedConditions[item.itemId || 0] === 'missing'}>
+										<input
+											type="radio"
+											bind:group={trackedConditions[item.itemId || 0]}
+											value="missing"
+											disabled={loading}
+										/>
+										<span class="material-symbols-rounded missing">cancel</span>
+										<span class="md-label-medium">Missing</span>
+									</label>
+								</div>
 							</div>
-						</div>
-					{:else if item.type === 'generic'}
-						<div class="generic-return">
-							<label>{item.name}</label>
-							<div style="display: flex; align-items: center; gap: 0.5rem;">
-								<span>Returned:</span>
-								<input
-									type="number"
-									min="0"
-									max={item.quantity || 1}
-									bind:value={genericReturns[item.categoryId || 0]}
-									disabled={loading}
-									style="width: 80px; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px;"
-								/>
-								<span>/ {item.quantity || 1}</span>
+						{:else if item.type === 'generic'}
+							<div class="condition-card">
+								<div class="item-header">
+									<span class="material-symbols-rounded icon-sm">inventory_2</span>
+									<span class="md-body-medium">{item.name}</span>
+								</div>
+								<div class="quantity-return">
+									<span class="md-body-small">Returned:</span>
+									<div class="quantity-control">
+										<button
+											class="qty-btn"
+											onclick={() => genericReturns[item.categoryId || 0] = Math.max(0, (genericReturns[item.categoryId || 0] || 0) - 1)}
+											disabled={loading || (genericReturns[item.categoryId || 0] || 0) <= 0}
+											aria-label="Decrease quantity for {item.name}"
+										>
+											<span class="material-symbols-rounded">remove</span>
+										</button>
+										<span class="qty-value md-title-medium">{genericReturns[item.categoryId || 0] || 0}</span>
+										<button
+											class="qty-btn"
+											onclick={() => genericReturns[item.categoryId || 0] = Math.min(item.quantity || 1, (genericReturns[item.categoryId || 0] || 0) + 1)}
+											disabled={loading || (genericReturns[item.categoryId || 0] || 0) >= (item.quantity || 1)}
+											aria-label="Increase quantity for {item.name}"
+										>
+											<span class="material-symbols-rounded">add</span>
+										</button>
+									</div>
+									<span class="md-body-small">/ {item.quantity || 1}</span>
+								</div>
 							</div>
-						</div>
-					{/if}
-				{/each}
-			</div>
+						{/if}
+					{/each}
+				</div>
 
-			<div class="section">
-				<h3>Payment Method</h3>
-				<div class="payment-options">
-					<label class:selected={paymentMethod === 'cash'}>
-						<input type="radio" bind:group={paymentMethod} value="cash" disabled={loading} />
-						Cash
-					</label>
-					<label class:selected={paymentMethod === 'credit'}>
-						<input type="radio" bind:group={paymentMethod} value="credit" disabled={loading} />
-						Credit
-					</label>
+				<!-- Payment Method Section -->
+				<div class="section">
+					<div class="section-header">
+						<span class="material-symbols-rounded">payments</span>
+						<span class="md-title-small">Payment Method</span>
+					</div>
+					<div class="payment-options">
+						<label class="payment-option" class:selected={paymentMethod === 'cash'}>
+							<input type="radio" bind:group={paymentMethod} value="cash" disabled={loading} />
+							<span class="material-symbols-rounded">payments</span>
+							<span class="md-label-large">Cash</span>
+						</label>
+						<label class="payment-option" class:selected={paymentMethod === 'credit'}>
+							<input type="radio" bind:group={paymentMethod} value="credit" disabled={loading} />
+							<span class="material-symbols-rounded">credit_card</span>
+							<span class="md-label-large">Credit</span>
+						</label>
+					</div>
+				</div>
+
+				<!-- Notes Section -->
+				<div class="section">
+					<div class="section-header">
+						<span class="material-symbols-rounded">note</span>
+						<span class="md-title-small">Notes</span>
+					</div>
+					<textarea
+						bind:value={notes}
+						disabled={loading}
+						placeholder="Add any notes about the rental condition..."
+						class="notes-textarea"
+					></textarea>
 				</div>
 			</div>
 
-			<div class="section">
-				<h3>Notes</h3>
-				<textarea
-					bind:value={notes}
-					disabled={loading}
-					placeholder="Add any notes about the rental condition..."
-					style="width: 100%; min-height: 80px; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; font-family: inherit; resize: vertical;"
-				></textarea>
-			</div>
-
-			<div class="modal-actions">
+			<div class="modal-footer">
 				<md-outlined-button onclick={handleCancel} disabled={loading}>Cancel</md-outlined-button>
-				<md-filled-button onclick={handleClose} disabled={loading}>Close Rental</md-filled-button>
+				<md-filled-button onclick={handleClose} disabled={loading}>
+					<span class="material-symbols-rounded" slot="icon">check</span>
+					Close Rental
+				</md-filled-button>
 			</div>
 		</div>
 	</div>
@@ -188,127 +254,354 @@
 <style>
 	.modal-overlay {
 		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
+		inset: 0;
 		background: rgba(0, 0, 0, 0.5);
 		display: flex;
 		justify-content: center;
 		align-items: center;
 		z-index: 200;
+		padding: var(--md-sys-spacing-md);
+		animation: md-animate-fade-in 0.2s var(--md-sys-motion-easing-standard);
 	}
+
 	.modal-content {
 		background: var(--md-sys-color-surface);
-		border-radius: 1rem;
-		padding: 1.5rem;
-		max-width: 500px;
-		width: 90%;
+		border-radius: var(--md-sys-shape-corner-extra-large);
+		max-width: 550px;
+		width: 100%;
 		max-height: 90vh;
 		overflow-y: auto;
+		animation: md-animate-scale-in 0.3s var(--md-sys-motion-easing-emphasized-decelerate);
 	}
+
 	.modal-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 1rem;
+		padding: var(--md-sys-spacing-lg);
+		border-bottom: 1px solid var(--md-sys-color-outline-variant);
+		position: sticky;
+		top: 0;
+		background: var(--md-sys-color-surface);
+		z-index: 1;
 	}
-	.modal-header h2 {
-		font-size: 1.25rem;
-		font-weight: 500;
-		margin: 0;
-		color: var(--md-sys-color-on-surface);
-	}
-	.close-modal {
-		background: none;
-		border: none;
-		font-size: 1.5rem;
-		cursor: pointer;
-	}
-	.rental-summary {
-		background: var(--md-sys-color-surface-container);
-		padding: 1rem;
-		border-radius: 0.5rem;
-		margin-bottom: 1.5rem;
-	}
-	.rental-summary p {
-		margin: 0.5rem 0;
-		font-size: 0.875rem;
-		color: var(--md-sys-color-on-surface-variant);
-	}
-	.section {
-		margin-bottom: 1.5rem;
-	}
-	.section h3 {
-		font-size: 0.875rem;
-		font-weight: 600;
-		margin: 0 0 1rem 0;
-		color: var(--md-sys-color-on-surface);
-		text-transform: uppercase;
-	}
-	.condition-item {
-		padding: 1rem;
-		background: var(--md-sys-color-surface-container-low);
-		border-radius: 0.5rem;
-		margin-bottom: 1rem;
-	}
-	.condition-item label {
-		display: block;
-		font-weight: 500;
-		margin-bottom: 0.5rem;
-		font-size: 0.875rem;
-		color: var(--md-sys-color-on-surface);
-	}
-	.condition-options {
-		display: flex;
-		gap: 1rem;
-		margin-top: 0.5rem;
-	}
-	.condition-options label {
+
+	.modal-title {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-weight: normal;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.modal-title .material-symbols-rounded {
+		font-size: 28px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.modal-title h2 {
 		margin: 0;
-		cursor: pointer;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.modal-body {
+		padding: var(--md-sys-spacing-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-lg);
+	}
+
+	.modal-footer {
+		display: flex;
+		gap: var(--md-sys-spacing-sm);
+		justify-content: flex-end;
+		padding: var(--md-sys-spacing-lg);
+		border-top: 1px solid var(--md-sys-color-outline-variant);
+		position: sticky;
+		bottom: 0;
+		background: var(--md-sys-color-surface);
+	}
+
+	/* Rental Summary Card */
+	.rental-summary-card {
+		background: var(--md-sys-color-primary-container);
+		padding: var(--md-sys-spacing-md);
+		border-radius: var(--md-sys-shape-corner-medium);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.summary-row {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.elapsed-badge {
+		margin-left: auto;
+		padding: 2px 8px;
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		font: var(--md-sys-typescale-label-small);
+		font-weight: 500;
+	}
+
+	/* Sections */
+	.section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		color: var(--md-sys-color-on-surface);
+		margin-bottom: var(--md-sys-spacing-xs);
+	}
+
+	.section-header .material-symbols-rounded {
+		font-size: 20px;
+		color: var(--md-sys-color-primary);
+	}
+
+	/* Condition Card */
+	.condition-card {
+		background: var(--md-sys-color-surface-container-low);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		padding: var(--md-sys-spacing-md);
+	}
+
+	.item-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		margin-bottom: var(--md-sys-spacing-sm);
+	}
+
+	.item-header .material-symbols-rounded {
+		color: var(--md-sys-color-primary);
+	}
+
+	.item-code {
+		margin-left: auto;
+		padding: 2px 8px;
+		background: var(--md-sys-color-surface-container-high);
+		border-radius: var(--md-sys-shape-corner-extra-small);
+		font-family: monospace;
 		font-size: 0.8rem;
 	}
-	.generic-return {
-		padding: 1rem;
-		background: var(--md-sys-color-surface-container-low);
-		border-radius: 0.5rem;
-		margin-bottom: 1rem;
-	}
-	.generic-return label {
-		display: block;
-		font-weight: 500;
-		margin-bottom: 0.75rem;
-		font-size: 0.875rem;
-		color: var(--md-sys-color-on-surface);
-	}
-	.modal-actions {
+
+	.condition-options {
 		display: flex;
-		gap: 0.75rem;
-		justify-content: flex-end;
+		gap: var(--md-sys-spacing-sm);
 	}
-	.payment-options {
+
+	.condition-option {
+		flex: 1;
 		display: flex;
-		gap: 1rem;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		padding: var(--md-sys-spacing-sm);
+		border: 2px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-small);
+		cursor: pointer;
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 	}
-	.payment-options label {
+
+	.condition-option input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.condition-option:has(input:focus-visible) {
+		outline: 2px solid var(--md-sys-color-primary);
+		outline-offset: 2px;
+	}
+
+	.condition-option:hover {
+		background: var(--md-sys-color-surface-container);
+	}
+
+	.condition-option.selected {
+		border-color: var(--md-sys-color-primary);
+		background: var(--md-sys-color-surface-container-high);
+	}
+
+	.condition-option .material-symbols-rounded.good {
+		color: var(--md-sys-color-success);
+	}
+
+	.condition-option .material-symbols-rounded.damaged {
+		color: var(--md-sys-color-warning);
+	}
+
+	.condition-option .material-symbols-rounded.missing {
+		color: var(--md-sys-color-error);
+	}
+
+	/* Quantity Return */
+	.quantity-return {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1rem;
-		border: 1px solid var(--md-sys-color-outline);
-		border-radius: 0.5rem;
-		cursor: pointer;
-		font-weight: 500;
-		transition: all 0.2s;
+		gap: var(--md-sys-spacing-sm);
 	}
-	.payment-options label.selected {
+
+	.quantity-control {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.qty-btn {
+		width: 36px;
+		height: 36px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--md-sys-color-surface-container-high);
+		border: none;
+		border-radius: var(--md-sys-shape-corner-full);
+		color: var(--md-sys-color-on-surface);
+		cursor: pointer;
+		transition: background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.qty-btn:hover:not(:disabled) {
+		background: var(--md-sys-color-primary-container);
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.qty-btn:disabled {
+		opacity: 0.38;
+		cursor: not-allowed;
+	}
+
+	.qty-btn .material-symbols-rounded {
+		font-size: 18px;
+	}
+
+	.qty-value {
+		min-width: 32px;
+		text-align: center;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	/* Payment Options */
+	.payment-options {
+		display: flex;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.payment-option {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md);
+		border: 2px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		cursor: pointer;
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.payment-option input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.payment-option:has(input:focus-visible) {
+		outline: 2px solid var(--md-sys-color-primary);
+		outline-offset: 2px;
+	}
+
+	.payment-option:hover {
+		background: var(--md-sys-color-surface-container);
+	}
+
+	.payment-option.selected {
 		background: var(--md-sys-color-primary-container);
 		border-color: var(--md-sys-color-primary);
 		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.payment-option .material-symbols-rounded {
+		font-size: 24px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.payment-option.selected .material-symbols-rounded {
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	/* Notes Textarea */
+	.notes-textarea {
+		width: 100%;
+		min-height: 80px;
+		padding: var(--md-sys-spacing-md);
+		border: 1px solid var(--md-sys-color-outline);
+		border-radius: var(--md-sys-shape-corner-small);
+		font-family: inherit;
+		font: var(--md-sys-typescale-body-medium);
+		resize: vertical;
+		background: var(--md-sys-color-surface);
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.notes-textarea:focus {
+		outline: none;
+		border-color: var(--md-sys-color-primary);
+		border-width: 2px;
+	}
+
+	/* Icon Sizes */
+	.icon-sm {
+		font-size: 18px;
+	}
+
+	/* Animations */
+	@keyframes md-animate-fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	@keyframes md-animate-scale-in {
+		from {
+			opacity: 0;
+			transform: scale(0.95);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+
+	/* Responsive */
+	@media (max-width: 480px) {
+		.condition-options {
+			flex-direction: column;
+		}
+
+		.payment-options {
+			flex-direction: column;
+		}
 	}
 </style>
