@@ -381,6 +381,59 @@ body {
 .icon-lg { font-size: 32px; }
 .icon-xl { font-size: 48px; }
 
+/* ========================================
+   Material Web Button Icon & Text Fixes
+   ======================================== */
+
+/* Fix icon alignment and sizing within Material Web buttons */
+md-filled-button,
+md-outlined-button,
+md-filled-tonal-button,
+md-text-button {
+	/* Ensure proper icon-text alignment */
+	--md-filled-button-icon-size: 18px;
+	--md-outlined-button-icon-size: 18px;
+	--md-filled-tonal-button-icon-size: 18px;
+	--md-text-button-icon-size: 18px;
+}
+
+/* Ensure buttons don't overflow their containers */
+md-filled-button,
+md-outlined-button,
+md-filled-tonal-button,
+md-text-button {
+	max-width: 100%;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+/* Fix icon slot alignment */
+md-filled-button [slot="icon"],
+md-outlined-button [slot="icon"],
+md-filled-tonal-button [slot="icon"],
+md-text-button [slot="icon"] {
+	font-size: 18px !important;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Fix md-icon-button centering */
+md-icon-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+md-icon-button .material-symbols-rounded {
+	font-size: 24px;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
 /* Animation keyframes */
 @keyframes md-ripple {
 	0% {

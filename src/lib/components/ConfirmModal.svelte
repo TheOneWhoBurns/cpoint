@@ -120,17 +120,21 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
+		min-width: 0;
+		flex: 1;
 	}
 
 	.icon-container {
 		width: 40px;
 		height: 40px;
+		min-width: 40px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		border-radius: var(--md-sys-shape-corner-full);
 		background: var(--md-sys-color-primary-container);
 		color: var(--md-sys-color-on-primary-container);
+		flex-shrink: 0;
 	}
 
 	.icon-container.danger {
@@ -145,6 +149,10 @@
 
 	.icon-container .material-symbols-rounded {
 		font-size: 24px;
+		line-height: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.modal-title h2 {
@@ -177,6 +185,11 @@
 		padding: var(--md-sys-spacing-lg);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
 		background: var(--md-sys-color-surface-container-low);
+	}
+
+	.modal-actions md-filled-button,
+	.modal-actions md-outlined-button {
+		flex-shrink: 0;
 	}
 
 	.danger-btn {

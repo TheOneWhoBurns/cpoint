@@ -290,11 +290,14 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
+		min-width: 0;
+		flex: 1;
 	}
 
 	.modal-title .material-symbols-rounded {
 		font-size: 28px;
 		color: var(--md-sys-color-primary);
+		flex-shrink: 0;
 	}
 
 	.modal-title h2 {
@@ -318,6 +321,11 @@
 		position: sticky;
 		bottom: 0;
 		background: var(--md-sys-color-surface);
+	}
+
+	.modal-footer md-filled-button,
+	.modal-footer md-outlined-button {
+		flex-shrink: 0;
 	}
 
 	/* Rental Summary Card */
@@ -380,10 +388,18 @@
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
 		margin-bottom: var(--md-sys-spacing-sm);
+		min-width: 0;
 	}
 
 	.item-header .material-symbols-rounded {
 		color: var(--md-sys-color-primary);
+		flex-shrink: 0;
+	}
+
+	.item-header .md-body-medium {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.item-code {

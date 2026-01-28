@@ -183,261 +183,264 @@
 </script>
 
 <div class="equipment-page">
-	<!-- Create Category Card -->
-	<section class="card">
-		<div class="card-header">
-			<span class="material-symbols-rounded">category</span>
-			<h2 class="md-title-large">Create Category</h2>
-		</div>
-		<div class="card-content">
-			<div class="form-row">
+	<!-- Top Row: Category Creation + Equipment Registration Side by Side -->
+	<div class="top-row">
+		<!-- Create Category Card -->
+		<section class="card">
+			<div class="card-header">
+				<span class="material-symbols-rounded">category</span>
+				<h2 class="md-title-large">New Category</h2>
+			</div>
+			<div class="card-content">
 				<md-outlined-text-field
 					label="Category Name"
 					placeholder="e.g., Surfboards, Leashes"
 					value={categoryName}
 					oninput={(e: Event) => categoryName = (e.target as HTMLInputElement).value}
-					class="flex-grow"
+					onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && categoryName && createCategory()}
 				>
 					<span class="material-symbols-rounded" slot="leading-icon">label</span>
 				</md-outlined-text-field>
-			</div>
 
-			<div class="type-selector">
-				<span class="md-label-large">Tracking Type:</span>
-				<div class="type-options">
+				<div class="type-chips">
 					<button
-						class="type-option"
+						class="type-chip"
 						class:selected={trackingType === 'tracked'}
 						onclick={() => trackingType = 'tracked'}
+						aria-pressed={trackingType === 'tracked'}
 					>
 						<span class="material-symbols-rounded">qr_code_2</span>
-						<div class="type-info">
-							<span class="md-label-large">Tracked</span>
-							<span class="md-body-small">Unique items with codes</span>
-						</div>
+						<span class="md-label-medium">Tracked</span>
 					</button>
 					<button
-						class="type-option"
+						class="type-chip"
 						class:selected={trackingType === 'generic'}
 						onclick={() => trackingType = 'generic'}
+						aria-pressed={trackingType === 'generic'}
 					>
 						<span class="material-symbols-rounded">inventory</span>
-						<div class="type-info">
-							<span class="md-label-large">Generic</span>
-							<span class="md-body-small">Quantity-based items</span>
-						</div>
+						<span class="md-label-medium">Generic</span>
 					</button>
 				</div>
-			</div>
 
-			<md-filled-button onclick={createCategory} disabled={loading || !categoryName}>
-				<span class="material-symbols-rounded" slot="icon">add</span>
-				Create Category
-			</md-filled-button>
-		</div>
-	</section>
-
-	<!-- Categories Table -->
-	<section class="card">
-		<div class="card-header">
-			<span class="material-symbols-rounded">folder</span>
-			<h2 class="md-title-large">Categories</h2>
-			<span class="badge md-label-medium">{data.categories.length}</span>
-		</div>
-
-		{#if data.categories.length === 0}
-			<div class="empty-state">
-				<span class="material-symbols-rounded">folder_off</span>
-				<p class="md-body-medium">No categories yet</p>
-				<p class="md-body-small">Create your first category above</p>
-			</div>
-		{:else}
-			<div class="table-container">
-				<table class="data-table">
-					<thead>
-						<tr>
-							<th>Name</th>
-							<th>Type</th>
-							<th>Inventory</th>
-							<th>Status</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.categories as cat}
-							<tr>
-								<td>
-									<div class="cell-with-icon">
-										<span class="material-symbols-rounded icon-sm">
-											{cat.trackingType === 'tracked' ? 'qr_code_2' : 'inventory'}
-										</span>
-										<span class="md-body-medium">{cat.name}</span>
-									</div>
-								</td>
-								<td>
-									<span class="badge-small" class:tracked={cat.trackingType === 'tracked'} class:generic={cat.trackingType === 'generic'}>
-										{cat.trackingType}
-									</span>
-								</td>
-								<td>
-									{#if cat.trackingType === 'generic'}
-										<div class="quantity-control">
-											<input
-												type="number"
-												min="0"
-												value={cat.availableQuantity ?? 0}
-												onchange={(e: Event) => updateGenericQuantity(cat.id, parseInt((e.target as HTMLInputElement).value) || 0)}
-												class="quantity-input"
-											/>
-											<span class="md-body-small">/ {cat.totalQuantity}</span>
-										</div>
-									{:else}
-										<span class="md-body-medium">{data.trackedItems.filter(t => t.productTypeId === cat.id).length} items</span>
-									{/if}
-								</td>
-								<td>
-									<span class="status-badge" class:active={cat.isActive} class:inactive={!cat.isActive}>
-										{cat.isActive ? 'Active' : 'Inactive'}
-									</span>
-								</td>
-								<td>
-									<md-icon-button onclick={() => promptDeleteCategory(cat.id)} aria-label="Delete category">
-										<span class="material-symbols-rounded">delete</span>
-									</md-icon-button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-
-		{#if error}
-			<div class="error-message">
-				<span class="material-symbols-rounded">error</span>
-				<span class="md-body-medium">{error}</span>
-			</div>
-		{/if}
-	</section>
-
-	<!-- Register Equipment Card -->
-	<section class="card">
-		<div class="card-header">
-			<span class="material-symbols-rounded">add_circle</span>
-			<h2 class="md-title-large">Register Equipment</h2>
-		</div>
-
-		{#if data.categories.length === 0}
-			<div class="empty-state">
-				<span class="material-symbols-rounded">info</span>
-				<p class="md-body-medium">Create a category first</p>
-			</div>
-		{:else}
-			<div class="card-content">
-				<div class="form-row">
-					<select bind:value={selectedCategoryId} class="category-select">
-						{#each data.categories as cat}
-							<option value={cat.id}>
-								{cat.name} ({cat.trackingType})
-							</option>
-						{/each}
-					</select>
-				</div>
-
-				{#if getSelectedCategory()?.trackingType === 'tracked'}
-					<div class="form-row">
-						<md-outlined-text-field
-							label="Item Code"
-							placeholder="e.g., SURF-001"
-							value={itemCode}
-							oninput={(e: Event) => itemCode = (e.target as HTMLInputElement).value}
-							class="flex-grow"
-						>
-							<span class="material-symbols-rounded" slot="leading-icon">qr_code</span>
-						</md-outlined-text-field>
-					</div>
-					<p class="helper-text md-body-small">
-						<span class="material-symbols-rounded icon-sm">info</span>
-						Register items one by one. Each needs a unique code.
-					</p>
-				{:else}
-					<div class="form-row">
-						<md-outlined-text-field
-							label="Quantity to add"
-							type="number"
-							min="1"
-							value={genericQuantity}
-							oninput={(e: Event) => genericQuantity = (e.target as HTMLInputElement).value}
-							class="flex-grow"
-						>
-							<span class="material-symbols-rounded" slot="leading-icon">add_shopping_cart</span>
-						</md-outlined-text-field>
-					</div>
-					<p class="helper-text md-body-small">
-						<span class="material-symbols-rounded icon-sm">info</span>
-						Current total: {getSelectedCategory()?.totalQuantity ?? 0} items
-					</p>
-				{/if}
-
-				<md-filled-button onclick={addEquipment} disabled={loading}>
+				<md-filled-button onclick={createCategory} disabled={loading || !categoryName}>
 					<span class="material-symbols-rounded" slot="icon">add</span>
-					{getSelectedCategory()?.trackingType === 'tracked' ? 'Register Item' : 'Add Quantity'}
+					Create
 				</md-filled-button>
 			</div>
-		{/if}
-	</section>
+		</section>
 
-	<!-- Tracked Items Table -->
-	<section class="card">
-		<div class="card-header">
-			<span class="material-symbols-rounded">list_alt</span>
-			<h2 class="md-title-large">Tracked Items</h2>
-			<span class="badge md-label-medium">{data.trackedItems.length}</span>
-		</div>
-
-		{#if data.trackedItems.length === 0}
-			<div class="empty-state">
-				<span class="material-symbols-rounded">inventory_2</span>
-				<p class="md-body-medium">No tracked items registered</p>
-				<p class="md-body-small">Add items using the form above</p>
+		<!-- Quick Add Equipment Card -->
+		<section class="card">
+			<div class="card-header">
+				<span class="material-symbols-rounded">add_circle</span>
+				<h2 class="md-title-large">Quick Add</h2>
 			</div>
-		{:else}
-			<div class="table-container">
-				<table class="data-table">
-					<thead>
-						<tr>
-							<th>Category</th>
-							<th>Code</th>
-							<th>Status</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.trackedItems as item}
-							<tr>
-								<td>
-									<span class="md-body-medium">{getCategoryName(item.productTypeId ?? 0)}</span>
-								</td>
-								<td>
-									<code class="item-code">{item.code}</code>
-								</td>
-								<td>
-									<span class="status-badge" class:available={item.status === 'available'} class:rented={item.status === 'rented'}>
-										{item.status}
-									</span>
-								</td>
-								<td>
-									<md-icon-button onclick={() => promptDeleteItem(item.id)} aria-label="Delete item">
-										<span class="material-symbols-rounded">delete</span>
-									</md-icon-button>
-								</td>
-							</tr>
+
+			{#if data.categories.length === 0}
+				<div class="empty-state compact">
+					<span class="material-symbols-rounded">info</span>
+					<p class="md-body-small">Create a category first</p>
+				</div>
+			{:else}
+				<div class="card-content">
+					<div class="category-chips">
+						{#each data.categories as cat}
+							<button
+								class="category-chip"
+								class:selected={selectedCategoryId === cat.id}
+								onclick={() => selectedCategoryId = cat.id}
+								aria-pressed={selectedCategoryId === cat.id}
+							>
+								<span class="material-symbols-rounded">
+									{cat.trackingType === 'tracked' ? 'qr_code_2' : 'inventory'}
+								</span>
+								<span class="md-label-medium">{cat.name}</span>
+								<span class="chip-count md-label-small">
+									{cat.trackingType === 'tracked'
+										? data.trackedItems.filter(t => t.productTypeId === cat.id).length
+										: cat.availableQuantity ?? 0}
+								</span>
+							</button>
 						{/each}
-					</tbody>
-				</table>
+					</div>
+
+					{#if getSelectedCategory()?.trackingType === 'tracked'}
+						<div class="quick-input-row">
+							<md-outlined-text-field
+								label="Item Code"
+								placeholder="SURF-001"
+								value={itemCode}
+								oninput={(e: Event) => itemCode = (e.target as HTMLInputElement).value}
+								onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && itemCode && addEquipment()}
+							>
+								<span class="material-symbols-rounded" slot="leading-icon">qr_code</span>
+							</md-outlined-text-field>
+							<md-filled-tonal-button onclick={addEquipment} disabled={loading || !itemCode}>
+								<span class="material-symbols-rounded" slot="icon">add</span>
+								Add
+							</md-filled-tonal-button>
+						</div>
+					{:else}
+						<div class="quick-input-row">
+							<md-outlined-text-field
+								label="Quantity"
+								type="number"
+								min="1"
+								value={genericQuantity}
+								oninput={(e: Event) => genericQuantity = (e.target as HTMLInputElement).value}
+								onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && addEquipment()}
+							>
+								<span class="material-symbols-rounded" slot="leading-icon">add_shopping_cart</span>
+							</md-outlined-text-field>
+							<md-filled-tonal-button onclick={addEquipment} disabled={loading}>
+								<span class="material-symbols-rounded" slot="icon">add</span>
+								Add
+							</md-filled-tonal-button>
+						</div>
+						<p class="stock-hint md-body-small">
+							Current stock: {getSelectedCategory()?.availableQuantity ?? 0} / {getSelectedCategory()?.totalQuantity ?? 0}
+						</p>
+					{/if}
+				</div>
+			{/if}
+		</section>
+	</div>
+
+	{#if error}
+		<div class="error-message">
+			<span class="material-symbols-rounded">error</span>
+			<span class="md-body-medium">{error}</span>
+			<md-icon-button onclick={() => error = ''} aria-label="Dismiss error">
+				<span class="material-symbols-rounded">close</span>
+			</md-icon-button>
+		</div>
+	{/if}
+
+	<!-- Categories & Items Grid -->
+	<div class="data-grid">
+		<!-- Categories Table -->
+		<section class="card">
+			<div class="card-header">
+				<span class="material-symbols-rounded">folder</span>
+				<h2 class="md-title-large">Categories</h2>
+				<span class="badge md-label-medium">{data.categories.length}</span>
 			</div>
-		{/if}
-	</section>
+
+			{#if data.categories.length === 0}
+				<div class="empty-state">
+					<span class="material-symbols-rounded">folder_off</span>
+					<p class="md-body-medium">No categories yet</p>
+					<p class="md-body-small">Create your first category above</p>
+				</div>
+			{:else}
+				<div class="table-container">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Type</th>
+								<th>Inventory</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each data.categories as cat}
+								<tr class:selected-row={selectedCategoryId === cat.id} onclick={() => selectedCategoryId = cat.id}>
+									<td>
+										<div class="cell-with-icon">
+											<span class="material-symbols-rounded icon-sm">
+												{cat.trackingType === 'tracked' ? 'qr_code_2' : 'inventory'}
+											</span>
+											<span class="md-body-medium">{cat.name}</span>
+										</div>
+									</td>
+									<td>
+										<span class="badge-small" class:tracked={cat.trackingType === 'tracked'} class:generic={cat.trackingType === 'generic'}>
+											{cat.trackingType}
+										</span>
+									</td>
+									<td>
+										{#if cat.trackingType === 'generic'}
+											<div class="quantity-control" onclick={(e) => e.stopPropagation()}>
+												<input
+													type="number"
+													min="0"
+													value={cat.availableQuantity ?? 0}
+													onchange={(e: Event) => updateGenericQuantity(cat.id, parseInt((e.target as HTMLInputElement).value) || 0)}
+													class="quantity-input"
+												/>
+												<span class="md-body-small">/ {cat.totalQuantity}</span>
+											</div>
+										{:else}
+											<span class="md-body-medium">{data.trackedItems.filter(t => t.productTypeId === cat.id).length} items</span>
+										{/if}
+									</td>
+									<td onclick={(e) => e.stopPropagation()}>
+										<md-icon-button onclick={() => promptDeleteCategory(cat.id)} aria-label="Delete category">
+											<span class="material-symbols-rounded">delete</span>
+										</md-icon-button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</section>
+
+		<!-- Tracked Items Table -->
+		<section class="card">
+			<div class="card-header">
+				<span class="material-symbols-rounded">list_alt</span>
+				<h2 class="md-title-large">Tracked Items</h2>
+				<span class="badge md-label-medium">{data.trackedItems.length}</span>
+			</div>
+
+			{#if data.trackedItems.length === 0}
+				<div class="empty-state">
+					<span class="material-symbols-rounded">inventory_2</span>
+					<p class="md-body-medium">No tracked items</p>
+					<p class="md-body-small">Add items using Quick Add above</p>
+				</div>
+			{:else}
+				<div class="table-container">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Category</th>
+								<th>Code</th>
+								<th>Status</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each data.trackedItems as item}
+								<tr>
+									<td>
+										<span class="md-body-medium">{getCategoryName(item.productTypeId ?? 0)}</span>
+									</td>
+									<td>
+										<code class="item-code">{item.code}</code>
+									</td>
+									<td>
+										<span class="status-badge" class:available={item.status === 'available'} class:rented={item.status === 'rented'}>
+											{item.status}
+										</span>
+									</td>
+									<td>
+										<md-icon-button onclick={() => promptDeleteItem(item.id)} aria-label="Delete item">
+											<span class="material-symbols-rounded">delete</span>
+										</md-icon-button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</section>
+	</div>
 </div>
 
 <ConfirmModal
@@ -465,7 +468,21 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--md-sys-spacing-lg);
-		max-width: 1000px;
+		max-width: 1400px;
+	}
+
+	/* Top Row - Side by Side Layout */
+	.top-row {
+		display: grid;
+		grid-template-columns: 1fr 1.5fr;
+		gap: var(--md-sys-spacing-lg);
+	}
+
+	/* Data Grid - Side by Side Tables */
+	.data-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--md-sys-spacing-lg);
 	}
 
 	/* Card Styles */
@@ -480,7 +497,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
-		padding: var(--md-sys-spacing-lg);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
 		border-bottom: 1px solid var(--md-sys-color-outline-variant);
 		background: var(--md-sys-color-surface-container-low);
 	}
@@ -488,12 +505,16 @@
 	.card-header .material-symbols-rounded {
 		color: var(--md-sys-color-primary);
 		font-size: 24px;
+		flex-shrink: 0;
 	}
 
 	.card-header h2 {
 		flex: 1;
 		margin: 0;
 		color: var(--md-sys-color-on-surface);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.card-content {
@@ -509,96 +530,115 @@
 		color: var(--md-sys-color-on-secondary-container);
 		padding: 4px 12px;
 		border-radius: var(--md-sys-shape-corner-full);
+		flex-shrink: 0;
 	}
 
-	/* Form Styles */
-	.form-row {
+	/* Type Chips (Category Creation) */
+	.type-chips {
 		display: flex;
-		gap: var(--md-sys-spacing-md);
-		align-items: flex-start;
-	}
-
-	.form-row md-outlined-text-field {
-		width: 100%;
-	}
-
-	.flex-grow {
-		flex: 1;
-	}
-
-	/* Type Selector */
-	.type-selector {
-		display: flex;
-		flex-direction: column;
 		gap: var(--md-sys-spacing-sm);
 	}
 
-	.type-options {
-		display: flex;
-		gap: var(--md-sys-spacing-md);
-	}
-
-	.type-option {
+	.type-chip {
 		flex: 1;
 		display: flex;
 		align-items: center;
-		gap: var(--md-sys-spacing-md);
-		padding: var(--md-sys-spacing-md);
+		justify-content: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
 		background: var(--md-sys-color-surface-container);
 		border: 2px solid var(--md-sys-color-outline-variant);
-		border-radius: var(--md-sys-shape-corner-medium);
+		border-radius: var(--md-sys-shape-corner-full);
 		cursor: pointer;
 		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 	}
 
-	.type-option:hover {
+	.type-chip:hover {
 		background: var(--md-sys-color-surface-container-high);
 	}
 
-	.type-option.selected {
+	.type-chip.selected {
 		border-color: var(--md-sys-color-primary);
 		background: var(--md-sys-color-primary-container);
-	}
-
-	.type-option .material-symbols-rounded {
-		font-size: 28px;
-		color: var(--md-sys-color-on-surface-variant);
-	}
-
-	.type-option.selected .material-symbols-rounded {
 		color: var(--md-sys-color-on-primary-container);
 	}
 
-	.type-info {
-		display: flex;
-		flex-direction: column;
-		text-align: left;
-	}
-
-	.type-info .md-label-large {
-		color: var(--md-sys-color-on-surface);
-	}
-
-	.type-info .md-body-small {
+	.type-chip .material-symbols-rounded {
+		font-size: 18px;
 		color: var(--md-sys-color-on-surface-variant);
 	}
 
-	/* Category Select */
-	.category-select {
-		width: 100%;
-		padding: var(--md-sys-spacing-md);
-		font-size: 1rem;
-		border: 1px solid var(--md-sys-color-outline);
-		border-radius: var(--md-sys-shape-corner-small);
-		background: var(--md-sys-color-surface);
-		color: var(--md-sys-color-on-surface);
+	.type-chip.selected .material-symbols-rounded {
+		color: var(--md-sys-color-on-primary-container);
 	}
 
-	/* Helper Text */
-	.helper-text {
+	/* Category Chips (Quick Add) */
+	.category-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.category-chip {
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		background: var(--md-sys-color-surface-container);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-full);
+		cursor: pointer;
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.category-chip:hover {
+		background: var(--md-sys-color-surface-container-high);
+	}
+
+	.category-chip.selected {
+		border-color: var(--md-sys-color-primary);
+		background: var(--md-sys-color-primary-container);
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.category-chip .material-symbols-rounded {
+		font-size: 16px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.category-chip.selected .material-symbols-rounded {
+		color: var(--md-sys-color-on-primary-container);
+	}
+
+	.chip-count {
+		padding: 2px 6px;
+		background: var(--md-sys-color-surface-container-highest);
+		border-radius: var(--md-sys-shape-corner-full);
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.category-chip.selected .chip-count {
+		background: var(--md-sys-color-primary);
+		color: var(--md-sys-color-on-primary);
+	}
+
+	/* Quick Input Row */
+	.quick-input-row {
+		display: flex;
+		gap: var(--md-sys-spacing-sm);
+		align-items: flex-start;
+	}
+
+	.quick-input-row md-outlined-text-field {
+		flex: 1;
+	}
+
+	.quick-input-row md-filled-tonal-button {
+		flex-shrink: 0;
+		margin-top: 8px;
+	}
+
+	.stock-hint {
 		color: var(--md-sys-color-on-surface-variant);
 		margin: 0;
 	}
@@ -615,7 +655,7 @@
 
 	.data-table th,
 	.data-table td {
-		padding: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
 		text-align: left;
 		border-bottom: 1px solid var(--md-sys-color-outline-variant);
 	}
@@ -626,19 +666,36 @@
 		background: var(--md-sys-color-surface-container-low);
 	}
 
+	.data-table tbody tr {
+		cursor: pointer;
+		transition: background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
 	.data-table tbody tr:hover {
 		background: var(--md-sys-color-surface-container);
+	}
+
+	.data-table tbody tr.selected-row {
+		background: var(--md-sys-color-primary-container);
 	}
 
 	.cell-with-icon {
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
+		min-width: 0;
+	}
+
+	.cell-with-icon .md-body-medium {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.icon-sm {
 		font-size: 18px;
 		color: var(--md-sys-color-on-surface-variant);
+		flex-shrink: 0;
 	}
 
 	/* Badges */
@@ -648,6 +705,7 @@
 		border-radius: var(--md-sys-shape-corner-small);
 		font: var(--md-sys-typescale-label-small);
 		text-transform: capitalize;
+		white-space: nowrap;
 	}
 
 	.badge-small.tracked {
@@ -666,6 +724,7 @@
 		border-radius: var(--md-sys-shape-corner-full);
 		font: var(--md-sys-typescale-label-medium);
 		text-transform: capitalize;
+		white-space: nowrap;
 	}
 
 	.status-badge.active,
@@ -692,8 +751,8 @@
 	}
 
 	.quantity-input {
-		width: 70px;
-		padding: 6px 10px;
+		width: 60px;
+		padding: 4px 8px;
 		border: 1px solid var(--md-sys-color-outline);
 		border-radius: var(--md-sys-shape-corner-small);
 		font-size: 0.875rem;
@@ -717,13 +776,22 @@
 		flex-direction: column;
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
-		padding: var(--md-sys-spacing-xxl);
+		padding: var(--md-sys-spacing-xl);
 		color: var(--md-sys-color-on-surface-variant);
 	}
 
+	.empty-state.compact {
+		padding: var(--md-sys-spacing-lg);
+	}
+
 	.empty-state .material-symbols-rounded {
-		font-size: 48px;
+		font-size: 40px;
 		opacity: 0.5;
+	}
+
+	.empty-state p {
+		margin: 0;
+		text-align: center;
 	}
 
 	/* Error Message */
@@ -731,19 +799,52 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
-		padding: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
 		background: var(--md-sys-color-error-container);
 		color: var(--md-sys-color-on-error-container);
-		border-radius: var(--md-sys-shape-corner-small);
-		margin: var(--md-sys-spacing-md);
+		border-radius: var(--md-sys-shape-corner-medium);
 	}
 
 	.error-message .material-symbols-rounded {
 		font-size: 20px;
+		flex-shrink: 0;
+	}
+
+	.error-message .md-body-medium {
+		flex: 1;
+	}
+
+	.error-message md-icon-button {
+		--md-icon-button-icon-color: var(--md-sys-color-on-error-container);
+		flex-shrink: 0;
 	}
 
 	/* Icon Button Styles */
 	md-icon-button {
 		--md-icon-button-icon-color: var(--md-sys-color-error);
+		flex-shrink: 0;
+	}
+
+	/* Responsive - Tablet */
+	@media (max-width: 1024px) {
+		.top-row {
+			grid-template-columns: 1fr;
+		}
+
+		.data-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	/* Responsive - Mobile */
+	@media (max-width: 768px) {
+		.type-chips {
+			flex-direction: column;
+		}
+
+		.category-chips {
+			max-height: 120px;
+			overflow-y: auto;
+		}
 	}
 </style>

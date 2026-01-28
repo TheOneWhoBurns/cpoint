@@ -937,6 +937,12 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-md);
+		flex-shrink: 0;
+		min-width: 0;
+	}
+
+	.header-end md-outlined-button {
+		flex-shrink: 0;
 	}
 
 	.header-error {
@@ -981,6 +987,11 @@
 		gap: var(--md-sys-spacing-md);
 		margin-bottom: var(--md-sys-spacing-lg);
 		flex-wrap: wrap;
+	}
+
+	.action-bar md-filled-button,
+	.action-bar md-filled-tonal-button {
+		flex-shrink: 0;
 	}
 
 	.stats-badges {
@@ -1365,6 +1376,11 @@
 		position: sticky;
 		bottom: 0;
 		background: var(--md-sys-color-surface);
+	}
+
+	.modal-footer md-filled-button,
+	.modal-footer md-outlined-button {
+		flex-shrink: 0;
 	}
 
 	/* Form Styles */
