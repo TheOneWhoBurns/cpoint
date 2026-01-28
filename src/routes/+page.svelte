@@ -243,24 +243,30 @@
 	async function executeEditRental(updateData: { customer: object; rentalType: string; notes: string }) {
 		if (!selectedRentalToEdit) return;
 		loading = true;
-		const res = await fetch('/api/rentals', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				id: selectedRentalToEdit.id,
-				action: 'edit',
-				customer: updateData.customer,
-				rentalType: updateData.rentalType,
-				notes: updateData.notes
-			})
-		});
-		if (res.ok) await invalidateAll();
-		else {
-			const d = await res.json();
-			error = d.error || 'Failed to update rental';
+		try {
+			const res = await fetch('/api/rentals', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: selectedRentalToEdit.id,
+					action: 'edit',
+					customer: updateData.customer,
+					rentalType: updateData.rentalType,
+					notes: updateData.notes
+				})
+			});
+			if (res.ok) {
+				await invalidateAll();
+			} else {
+				const d = await res.json();
+				error = d.error || 'Failed to update rental';
+			}
+		} catch {
+			error = 'Network error updating rental';
+		} finally {
+			loading = false;
+			selectedRentalToEdit = null;
 		}
-		loading = false;
-		selectedRentalToEdit = null;
 	}
 
 	async function createStoreSale() {

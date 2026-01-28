@@ -110,7 +110,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
-	const { id, action, returnData, currentShiftId } = await request.json();
+	const body = await request.json();
+	const { id, action, returnData, currentShiftId, customer, rentalType, notes } = body;
 
 	if (!id) {
 		return json({ error: 'Rental ID required' }, { status: 400 });
@@ -125,12 +126,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		if (rental.status !== 'active') {
 			return json({ error: 'Cannot edit a closed rental' }, { status: 400 });
 		}
-
-		const { customer, rentalType, notes } = await request.json().then(data => ({
-			customer: data.customer,
-			rentalType: data.rentalType,
-			notes: data.notes
-		})).catch(() => ({ customer: undefined, rentalType: undefined, notes: undefined }));
 
 		// Store original values if not already stored
 		const currentPricing = rental.pricing as {type: string, hourly?: number, fullDay?: number, originalValues?: object};
@@ -215,14 +210,18 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 		}
 
-		// Use client-provided final price if available (includes discount), otherwise use calculated
-		const discount = returnData?.discount || 0;
-		const finalPrice = returnData?.finalPrice ?? (calculatedPrice - discount);
-		const yetToPay = returnData?.yetToPay || 0;
+		const discount = Math.max(0, Math.min(returnData?.discount || 0, calculatedPrice));
+		const serverFinalPrice = calculatedPrice - discount;
+		const finalPrice = Math.max(0, serverFinalPrice);
 
-		// Split payment amounts
-		const cashAmount = returnData?.cashAmount ?? 0;
-		const creditAmount = returnData?.creditAmount ?? 0;
+		const cashAmount = Math.max(0, returnData?.cashAmount ?? 0);
+		const creditAmount = Math.max(0, returnData?.creditAmount ?? 0);
+		const yetToPay = Math.max(0, returnData?.yetToPay || 0);
+
+		const totalPayment = cashAmount + creditAmount + yetToPay;
+		if (Math.abs(totalPayment - finalPrice) > 0.01) {
+			return json({ error: 'Payment amounts do not match final price' }, { status: 400 });
+		}
 
 		for (const item of rentalItems) {
 			if (item.type === 'tracked' && item.itemId) {

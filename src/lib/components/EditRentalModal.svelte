@@ -90,10 +90,15 @@
 			notes: notes.trim()
 		};
 
-		onSave(updateData);
-		resetForm();
-		open = false;
-		loading = false;
+		try {
+			await onSave(updateData);
+			resetForm();
+			open = false;
+		} catch (err) {
+			error = (err as Error)?.message ?? 'Failed to save changes';
+		} finally {
+			loading = false;
+		}
 	}
 
 	function handleCancel() {
@@ -413,6 +418,11 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	.type-option:focus-within {
+		outline: 2px solid var(--md-sys-color-primary);
+		outline-offset: 2px;
 	}
 
 	.type-option .material-symbols-rounded {
