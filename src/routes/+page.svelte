@@ -13,12 +13,15 @@
 	import '@material/web/select/select-option.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import CloseRentalModal from '$lib/components/CloseRentalModal.svelte';
+	import EditRentalModal from '$lib/components/EditRentalModal.svelte';
 	import GuideSelector from '$lib/components/GuideSelector.svelte';
 
 	let { data } = $props();
 
 	let closeRentalModalOpen = $state(false);
 	let selectedRentalToClose = $state<any>(null);
+	let editRentalModalOpen = $state(false);
+	let selectedRentalToEdit = $state<any>(null);
 	let confirmEndShift = $state(false);
 	let showShiftSummary = $state(false);
 	let shiftSummary = $state<{
@@ -232,6 +235,34 @@
 		closeRentalModalOpen = true;
 	}
 
+	function promptEditRental(id: number) {
+		selectedRentalToEdit = data.rentals.find(r => r.id === id);
+		editRentalModalOpen = true;
+	}
+
+	async function executeEditRental(updateData: { customer: object; rentalType: string; notes: string }) {
+		if (!selectedRentalToEdit) return;
+		loading = true;
+		const res = await fetch('/api/rentals', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				id: selectedRentalToEdit.id,
+				action: 'edit',
+				customer: updateData.customer,
+				rentalType: updateData.rentalType,
+				notes: updateData.notes
+			})
+		});
+		if (res.ok) await invalidateAll();
+		else {
+			const d = await res.json();
+			error = d.error || 'Failed to update rental';
+		}
+		loading = false;
+		selectedRentalToEdit = null;
+	}
+
 	async function createStoreSale() {
 		if (!selectedStoreProductId) {
 			saleError = 'Select a product';
@@ -402,10 +433,15 @@
 										<span class="md-body-small">Started {new Date(rental.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
 										<span class="elapsed-badge">{getElapsedTime(rental.startedAt)}</span>
 									</div>
-									<md-filled-tonal-button onclick={() => promptCloseRental(rental.id)} disabled={loading}>
-										<span class="material-symbols-rounded" slot="icon">check_circle</span>
-										Close Rental
-									</md-filled-tonal-button>
+									<div class="rental-actions">
+										<md-icon-button onclick={() => promptEditRental(rental.id)} disabled={loading} aria-label="Edit rental">
+											<span class="material-symbols-rounded">edit</span>
+										</md-icon-button>
+										<md-filled-tonal-button onclick={() => promptCloseRental(rental.id)} disabled={loading}>
+											<span class="material-symbols-rounded" slot="icon">check_circle</span>
+											Close Rental
+										</md-filled-tonal-button>
+									</div>
 								</div>
 							</div>
 						{/each}
@@ -880,8 +916,16 @@
 <CloseRentalModal
 	bind:open={closeRentalModalOpen}
 	rental={selectedRentalToClose}
+	operatorPasscode={$shiftStore.operator?.passcode || ''}
 	onClose={executeCloseRental}
 	onCancel={() => { closeRentalModalOpen = false; }}
+/>
+
+<EditRentalModal
+	bind:open={editRentalModalOpen}
+	rental={selectedRentalToEdit}
+	onSave={executeEditRental}
+	onCancel={() => { editRentalModalOpen = false; }}
 />
 
 <ConfirmModal
@@ -1174,6 +1218,12 @@
 		margin-top: auto;
 		padding-top: var(--md-sys-spacing-sm);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
+	}
+
+	.rental-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
 	}
 
 	.time-info {
