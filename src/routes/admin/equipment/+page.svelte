@@ -183,261 +183,267 @@
 </script>
 
 <div class="equipment-page">
-	<!-- Create Category Card -->
-	<section class="card">
-		<div class="card-header">
-			<span class="material-symbols-rounded">category</span>
-			<h2 class="md-title-large">Create Category</h2>
+	{#if error}
+		<div class="error-message">
+			<span class="material-symbols-rounded">error</span>
+			<span class="md-body-medium">{error}</span>
 		</div>
-		<div class="card-content">
-			<div class="form-row">
-				<md-outlined-text-field
-					label="Category Name"
-					placeholder="e.g., Surfboards, Leashes"
-					value={categoryName}
-					oninput={(e: Event) => categoryName = (e.target as HTMLInputElement).value}
-					class="flex-grow"
-				>
-					<span class="material-symbols-rounded" slot="leading-icon">label</span>
-				</md-outlined-text-field>
+	{/if}
+
+	<!-- Top Row: Forms Side by Side -->
+	<div class="forms-row">
+		<!-- Create Category Card -->
+		<section class="card">
+			<div class="card-header">
+				<span class="material-symbols-rounded">category</span>
+				<h2 class="md-title-large">Create Category</h2>
 			</div>
-
-			<div class="type-selector">
-				<span class="md-label-large">Tracking Type:</span>
-				<div class="type-options">
-					<button
-						class="type-option"
-						class:selected={trackingType === 'tracked'}
-						onclick={() => trackingType = 'tracked'}
-					>
-						<span class="material-symbols-rounded">qr_code_2</span>
-						<div class="type-info">
-							<span class="md-label-large">Tracked</span>
-							<span class="md-body-small">Unique items with codes</span>
-						</div>
-					</button>
-					<button
-						class="type-option"
-						class:selected={trackingType === 'generic'}
-						onclick={() => trackingType = 'generic'}
-					>
-						<span class="material-symbols-rounded">inventory</span>
-						<div class="type-info">
-							<span class="md-label-large">Generic</span>
-							<span class="md-body-small">Quantity-based items</span>
-						</div>
-					</button>
-				</div>
-			</div>
-
-			<md-filled-button onclick={createCategory} disabled={loading || !categoryName}>
-				<span class="material-symbols-rounded" slot="icon">add</span>
-				Create Category
-			</md-filled-button>
-		</div>
-	</section>
-
-	<!-- Categories Table -->
-	<section class="card">
-		<div class="card-header">
-			<span class="material-symbols-rounded">folder</span>
-			<h2 class="md-title-large">Categories</h2>
-			<span class="badge md-label-medium">{data.categories.length}</span>
-		</div>
-
-		{#if data.categories.length === 0}
-			<div class="empty-state">
-				<span class="material-symbols-rounded">folder_off</span>
-				<p class="md-body-medium">No categories yet</p>
-				<p class="md-body-small">Create your first category above</p>
-			</div>
-		{:else}
-			<div class="table-container">
-				<table class="data-table">
-					<thead>
-						<tr>
-							<th>Name</th>
-							<th>Type</th>
-							<th>Inventory</th>
-							<th>Status</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.categories as cat}
-							<tr>
-								<td>
-									<div class="cell-with-icon">
-										<span class="material-symbols-rounded icon-sm">
-											{cat.trackingType === 'tracked' ? 'qr_code_2' : 'inventory'}
-										</span>
-										<span class="md-body-medium">{cat.name}</span>
-									</div>
-								</td>
-								<td>
-									<span class="badge-small" class:tracked={cat.trackingType === 'tracked'} class:generic={cat.trackingType === 'generic'}>
-										{cat.trackingType}
-									</span>
-								</td>
-								<td>
-									{#if cat.trackingType === 'generic'}
-										<div class="quantity-control">
-											<input
-												type="number"
-												min="0"
-												value={cat.availableQuantity ?? 0}
-												onchange={(e: Event) => updateGenericQuantity(cat.id, parseInt((e.target as HTMLInputElement).value) || 0)}
-												class="quantity-input"
-											/>
-											<span class="md-body-small">/ {cat.totalQuantity}</span>
-										</div>
-									{:else}
-										<span class="md-body-medium">{data.trackedItems.filter(t => t.productTypeId === cat.id).length} items</span>
-									{/if}
-								</td>
-								<td>
-									<span class="status-badge" class:active={cat.isActive} class:inactive={!cat.isActive}>
-										{cat.isActive ? 'Active' : 'Inactive'}
-									</span>
-								</td>
-								<td>
-									<md-icon-button onclick={() => promptDeleteCategory(cat.id)} aria-label="Delete category">
-										<span class="material-symbols-rounded">delete</span>
-									</md-icon-button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-
-		{#if error}
-			<div class="error-message">
-				<span class="material-symbols-rounded">error</span>
-				<span class="md-body-medium">{error}</span>
-			</div>
-		{/if}
-	</section>
-
-	<!-- Register Equipment Card -->
-	<section class="card">
-		<div class="card-header">
-			<span class="material-symbols-rounded">add_circle</span>
-			<h2 class="md-title-large">Register Equipment</h2>
-		</div>
-
-		{#if data.categories.length === 0}
-			<div class="empty-state">
-				<span class="material-symbols-rounded">info</span>
-				<p class="md-body-medium">Create a category first</p>
-			</div>
-		{:else}
 			<div class="card-content">
 				<div class="form-row">
-					<select bind:value={selectedCategoryId} class="category-select">
-						{#each data.categories as cat}
-							<option value={cat.id}>
-								{cat.name} ({cat.trackingType})
-							</option>
-						{/each}
-					</select>
+					<md-outlined-text-field
+						label="Category Name"
+						placeholder="e.g., Surfboards, Leashes"
+						value={categoryName}
+						oninput={(e: Event) => categoryName = (e.target as HTMLInputElement).value}
+						class="flex-grow"
+					>
+						<span class="material-symbols-rounded" slot="leading-icon">label</span>
+					</md-outlined-text-field>
 				</div>
 
-				{#if getSelectedCategory()?.trackingType === 'tracked'}
-					<div class="form-row">
-						<md-outlined-text-field
-							label="Item Code"
-							placeholder="e.g., SURF-001"
-							value={itemCode}
-							oninput={(e: Event) => itemCode = (e.target as HTMLInputElement).value}
-							class="flex-grow"
+				<div class="type-selector">
+					<span class="md-label-large">Tracking Type:</span>
+					<div class="type-options">
+						<button
+							class="type-option"
+							class:selected={trackingType === 'tracked'}
+							onclick={() => trackingType = 'tracked'}
 						>
-							<span class="material-symbols-rounded" slot="leading-icon">qr_code</span>
-						</md-outlined-text-field>
-					</div>
-					<p class="helper-text md-body-small">
-						<span class="material-symbols-rounded icon-sm">info</span>
-						Register items one by one. Each needs a unique code.
-					</p>
-				{:else}
-					<div class="form-row">
-						<md-outlined-text-field
-							label="Quantity to add"
-							type="number"
-							min="1"
-							value={genericQuantity}
-							oninput={(e: Event) => genericQuantity = (e.target as HTMLInputElement).value}
-							class="flex-grow"
+							<span class="material-symbols-rounded">qr_code_2</span>
+							<div class="type-info">
+								<span class="md-label-large">Tracked</span>
+								<span class="md-body-small">Unique items with codes</span>
+							</div>
+						</button>
+						<button
+							class="type-option"
+							class:selected={trackingType === 'generic'}
+							onclick={() => trackingType = 'generic'}
 						>
-							<span class="material-symbols-rounded" slot="leading-icon">add_shopping_cart</span>
-						</md-outlined-text-field>
+							<span class="material-symbols-rounded">inventory</span>
+							<div class="type-info">
+								<span class="md-label-large">Generic</span>
+								<span class="md-body-small">Quantity-based items</span>
+							</div>
+						</button>
 					</div>
-					<p class="helper-text md-body-small">
-						<span class="material-symbols-rounded icon-sm">info</span>
-						Current total: {getSelectedCategory()?.totalQuantity ?? 0} items
-					</p>
-				{/if}
+				</div>
 
-				<md-filled-button onclick={addEquipment} disabled={loading}>
+				<md-filled-button onclick={createCategory} disabled={loading || !categoryName}>
 					<span class="material-symbols-rounded" slot="icon">add</span>
-					{getSelectedCategory()?.trackingType === 'tracked' ? 'Register Item' : 'Add Quantity'}
+					Create Category
 				</md-filled-button>
 			</div>
-		{/if}
-	</section>
+		</section>
 
-	<!-- Tracked Items Table -->
-	<section class="card">
-		<div class="card-header">
-			<span class="material-symbols-rounded">list_alt</span>
-			<h2 class="md-title-large">Tracked Items</h2>
-			<span class="badge md-label-medium">{data.trackedItems.length}</span>
-		</div>
-
-		{#if data.trackedItems.length === 0}
-			<div class="empty-state">
-				<span class="material-symbols-rounded">inventory_2</span>
-				<p class="md-body-medium">No tracked items registered</p>
-				<p class="md-body-small">Add items using the form above</p>
+		<!-- Register Equipment Card -->
+		<section class="card">
+			<div class="card-header">
+				<span class="material-symbols-rounded">add_circle</span>
+				<h2 class="md-title-large">Register Equipment</h2>
 			</div>
-		{:else}
-			<div class="table-container">
-				<table class="data-table">
-					<thead>
-						<tr>
-							<th>Category</th>
-							<th>Code</th>
-							<th>Status</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.trackedItems as item}
+
+			{#if data.categories.length === 0}
+				<div class="empty-state">
+					<span class="material-symbols-rounded">info</span>
+					<p class="md-body-medium">Create a category first</p>
+				</div>
+			{:else}
+				<div class="card-content">
+					<div class="form-row">
+						<select bind:value={selectedCategoryId} class="category-select">
+							{#each data.categories as cat}
+								<option value={cat.id}>
+									{cat.name} ({cat.trackingType})
+								</option>
+							{/each}
+						</select>
+					</div>
+
+					{#if getSelectedCategory()?.trackingType === 'tracked'}
+						<div class="form-row">
+							<md-outlined-text-field
+								label="Item Code"
+								placeholder="e.g., SURF-001"
+								value={itemCode}
+								oninput={(e: Event) => itemCode = (e.target as HTMLInputElement).value}
+								class="flex-grow"
+							>
+								<span class="material-symbols-rounded" slot="leading-icon">qr_code</span>
+							</md-outlined-text-field>
+						</div>
+						<p class="helper-text md-body-small">
+							<span class="material-symbols-rounded icon-sm">info</span>
+							Register items one by one. Each needs a unique code.
+						</p>
+					{:else}
+						<div class="form-row">
+							<md-outlined-text-field
+								label="Quantity to add"
+								type="number"
+								min="1"
+								value={genericQuantity}
+								oninput={(e: Event) => genericQuantity = (e.target as HTMLInputElement).value}
+								class="flex-grow"
+							>
+								<span class="material-symbols-rounded" slot="leading-icon">add_shopping_cart</span>
+							</md-outlined-text-field>
+						</div>
+						<p class="helper-text md-body-small">
+							<span class="material-symbols-rounded icon-sm">info</span>
+							Current total: {getSelectedCategory()?.totalQuantity ?? 0} items
+						</p>
+					{/if}
+
+					<md-filled-button onclick={addEquipment} disabled={loading}>
+						<span class="material-symbols-rounded" slot="icon">add</span>
+						{getSelectedCategory()?.trackingType === 'tracked' ? 'Register Item' : 'Add Quantity'}
+					</md-filled-button>
+				</div>
+			{/if}
+		</section>
+	</div>
+
+	<!-- Bottom Row: Tables Side by Side -->
+	<div class="tables-row">
+		<!-- Categories Table -->
+		<section class="card">
+			<div class="card-header">
+				<span class="material-symbols-rounded">folder</span>
+				<h2 class="md-title-large">Categories</h2>
+				<span class="badge md-label-medium">{data.categories.length}</span>
+			</div>
+
+			{#if data.categories.length === 0}
+				<div class="empty-state">
+					<span class="material-symbols-rounded">folder_off</span>
+					<p class="md-body-medium">No categories yet</p>
+					<p class="md-body-small">Create your first category above</p>
+				</div>
+			{:else}
+				<div class="table-container">
+					<table class="data-table">
+						<thead>
 							<tr>
-								<td>
-									<span class="md-body-medium">{getCategoryName(item.productTypeId ?? 0)}</span>
-								</td>
-								<td>
-									<code class="item-code">{item.code}</code>
-								</td>
-								<td>
-									<span class="status-badge" class:available={item.status === 'available'} class:rented={item.status === 'rented'}>
-										{item.status}
-									</span>
-								</td>
-								<td>
-									<md-icon-button onclick={() => promptDeleteItem(item.id)} aria-label="Delete item">
-										<span class="material-symbols-rounded">delete</span>
-									</md-icon-button>
-								</td>
+								<th>Name</th>
+								<th>Type</th>
+								<th>Inventory</th>
+								<th>Status</th>
+								<th>Actions</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{#each data.categories as cat}
+								<tr>
+									<td>
+										<div class="cell-with-icon">
+											<span class="material-symbols-rounded icon-sm">
+												{cat.trackingType === 'tracked' ? 'qr_code_2' : 'inventory'}
+											</span>
+											<span class="md-body-medium">{cat.name}</span>
+										</div>
+									</td>
+									<td>
+										<span class="badge-small" class:tracked={cat.trackingType === 'tracked'} class:generic={cat.trackingType === 'generic'}>
+											{cat.trackingType}
+										</span>
+									</td>
+									<td>
+										{#if cat.trackingType === 'generic'}
+											<div class="quantity-control">
+												<input
+													type="number"
+													min="0"
+													value={cat.availableQuantity ?? 0}
+													onchange={(e: Event) => updateGenericQuantity(cat.id, parseInt((e.target as HTMLInputElement).value) || 0)}
+													class="quantity-input"
+												/>
+												<span class="md-body-small">/ {cat.totalQuantity}</span>
+											</div>
+										{:else}
+											<span class="md-body-medium">{data.trackedItems.filter(t => t.productTypeId === cat.id).length} items</span>
+										{/if}
+									</td>
+									<td>
+										<span class="status-badge" class:active={cat.isActive} class:inactive={!cat.isActive}>
+											{cat.isActive ? 'Active' : 'Inactive'}
+										</span>
+									</td>
+									<td>
+										<md-icon-button onclick={() => promptDeleteCategory(cat.id)} aria-label="Delete category">
+											<span class="material-symbols-rounded">delete</span>
+										</md-icon-button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</section>
+
+		<!-- Tracked Items Table -->
+		<section class="card">
+			<div class="card-header">
+				<span class="material-symbols-rounded">list_alt</span>
+				<h2 class="md-title-large">Tracked Items</h2>
+				<span class="badge md-label-medium">{data.trackedItems.length}</span>
 			</div>
-		{/if}
-	</section>
+
+			{#if data.trackedItems.length === 0}
+				<div class="empty-state">
+					<span class="material-symbols-rounded">inventory_2</span>
+					<p class="md-body-medium">No tracked items registered</p>
+					<p class="md-body-small">Add items using the forms above</p>
+				</div>
+			{:else}
+				<div class="table-container">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Category</th>
+								<th>Code</th>
+								<th>Status</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each data.trackedItems as item}
+								<tr>
+									<td>
+										<span class="md-body-medium">{getCategoryName(item.productTypeId ?? 0)}</span>
+									</td>
+									<td>
+										<code class="item-code">{item.code}</code>
+									</td>
+									<td>
+										<span class="status-badge" class:available={item.status === 'available'} class:rented={item.status === 'rented'}>
+											{item.status}
+										</span>
+									</td>
+									<td>
+										<md-icon-button onclick={() => promptDeleteItem(item.id)} aria-label="Delete item">
+											<span class="material-symbols-rounded">delete</span>
+										</md-icon-button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</section>
+	</div>
 </div>
 
 <ConfirmModal
@@ -465,7 +471,22 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--md-sys-spacing-lg);
-		max-width: 1000px;
+	}
+
+	/* Side-by-side rows */
+	.forms-row,
+	.tables-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--md-sys-spacing-lg);
+		align-items: start;
+	}
+
+	@media (max-width: 900px) {
+		.forms-row,
+		.tables-row {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	/* Card Styles */
