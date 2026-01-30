@@ -336,8 +336,8 @@
 
 	.check-icon {
 		position: absolute;
-		top: 8px;
-		right: 8px;
+		top: var(--md-sys-spacing-sm);
+		right: var(--md-sys-spacing-sm);
 		font-size: 20px;
 		color: var(--md-sys-color-primary);
 	}

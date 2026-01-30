@@ -1043,7 +1043,7 @@
 	.count-badge {
 		background: var(--md-sys-color-secondary-container);
 		color: var(--md-sys-color-on-secondary-container);
-		padding: 4px 12px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		border-radius: var(--md-sys-shape-corner-full);
 	}
 
@@ -1097,7 +1097,7 @@
 		font-size: 24px;
 		color: var(--md-sys-color-primary);
 		background: var(--md-sys-color-primary-container);
-		padding: 8px;
+		padding: var(--md-sys-spacing-sm);
 		border-radius: var(--md-sys-shape-corner-full);
 	}
 
@@ -1113,12 +1113,12 @@
 	.hotel-text {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--md-sys-spacing-xs);
 		color: var(--md-sys-color-on-surface-variant);
 	}
 
 	.rental-type-badge {
-		padding: 4px 12px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		border-radius: var(--md-sys-shape-corner-full);
 		font: var(--md-sys-typescale-label-medium);
 	}
@@ -1136,7 +1136,7 @@
 	.price-badge {
 		background: var(--md-sys-color-primary);
 		color: var(--md-sys-color-on-primary);
-		padding: 4px 12px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		border-radius: var(--md-sys-shape-corner-full);
 		font: var(--md-sys-typescale-title-medium);
 		font-weight: 600;
@@ -1150,14 +1150,14 @@
 
 	.rental-items-list.compact {
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--md-sys-spacing-xs);
 	}
 
 	.item-chip {
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		padding: 4px 10px;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-surface-container-high);
 		border-radius: var(--md-sys-shape-corner-small);
 		color: var(--md-sys-color-on-surface);
@@ -1184,7 +1184,7 @@
 	}
 
 	.elapsed-badge {
-		padding: 2px 8px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-tertiary-container);
 		color: var(--md-sys-color-on-tertiary-container);
 		border-radius: var(--md-sys-shape-corner-small);
@@ -1195,13 +1195,13 @@
 	.rental-times {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--md-sys-spacing-xs);
 	}
 
 	.time-row {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--md-sys-spacing-xs);
 		color: var(--md-sys-color-on-surface-variant);
 	}
 
@@ -1359,7 +1359,7 @@
 	.modal-footer {
 		display: flex;
 		justify-content: flex-end;
-		gap: var(--md-sys-spacing-sm);
+		gap: var(--md-sys-spacing-md);
 		padding: var(--md-sys-spacing-lg);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
 		position: sticky;
@@ -1522,7 +1522,7 @@
 	.tracked-item-btn {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--md-sys-spacing-xs);
 		padding: var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-surface);
 		border: 1px solid var(--md-sys-color-outline-variant);
@@ -1586,7 +1586,7 @@
 	.stock-warning {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--md-sys-spacing-xs);
 		margin-left: auto;
 		color: var(--md-sys-color-error);
 		font: var(--md-sys-typescale-label-small);

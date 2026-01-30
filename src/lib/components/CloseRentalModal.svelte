@@ -311,7 +311,7 @@
 
 	.modal-footer {
 		display: flex;
-		gap: var(--md-sys-spacing-sm);
+		gap: var(--md-sys-spacing-md);
 		justify-content: flex-end;
 		padding: var(--md-sys-spacing-lg);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
@@ -339,7 +339,7 @@
 
 	.elapsed-badge {
 		margin-left: auto;
-		padding: 2px 8px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-tertiary-container);
 		color: var(--md-sys-color-on-tertiary-container);
 		border-radius: var(--md-sys-shape-corner-small);
@@ -388,7 +388,7 @@
 
 	.item-code {
 		margin-left: auto;
-		padding: 2px 8px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-surface-container-high);
 		border-radius: var(--md-sys-shape-corner-extra-small);
 		font-family: monospace;
@@ -405,7 +405,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 4px;
+		gap: var(--md-sys-spacing-xs);
 		padding: var(--md-sys-spacing-sm);
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-small);
