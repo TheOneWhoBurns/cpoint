@@ -2,13 +2,13 @@
 
 ## Overview
 
-This project uses GitHub Actions for continuous integration and a blue-green deployment strategy for zero-downtime updates.
+This project uses GitHub Actions for continuous integration and deploys to an EC2 instance running a systemd service.
+
+**Future**: Blue-green deployment infrastructure exists in the repo (`docker-compose.prod.yml`, `nginx.conf`) but is not yet in use. Production currently runs as a single Node.js process via systemd.
 
 ## Branch Structure
 
-- **main**: Stable, tested code. Deployments to prod are triggered from here.
-- **prod**: Production release tag reference (manual tag-based deployments if needed).
-- **rental-system**: Active development branch for MVP features.
+- **rental-system**: Default branch. Active development and production deployments are triggered from here.
 
 ## CI Pipeline
 
@@ -19,28 +19,19 @@ The CI pipeline (`.github/workflows/ci.yml`) runs on every push and PR to `main`
 3. **Tests**: Unit and integration tests
 4. **Build**: Production build verification
 
-All stages must pass before merging to main.
-
 ## Deployment Pipeline
 
-The deployment workflow (`.github/workflows/deploy.yml`) is triggered automatically on every merge to `main`.
-
-### Blue-Green Deployment Strategy
-
-Two identical app instances run in parallel:
-- **Blue**: Current production instance serving traffic
-- **Green**: New version deployed here first
+The deployment workflow (`.github/workflows/deploy.yml`) is triggered automatically on every push to **`rental-system`** (including PR merges).
 
 ### Deployment Steps
 
-1. GitHub Actions builds Docker image from latest main commit
-2. SSH into production server and pull code
-3. Build new Docker image with new tag
-4. Start green instance with new image
-5. Health check green instance
-6. If healthy, switch nginx to route traffic to green
-7. Blue becomes the standby instance
-8. Next deployment reverses the roles
+1. GitHub Actions SSHs into EC2 production server
+2. `git pull origin rental-system`
+3. `npm ci` — install dependencies
+4. `npm run build` — build SvelteKit app
+5. `npm run db:push` — apply schema changes
+6. `sudo systemctl restart rental-app` — restart the Node.js service
+7. `curl -f http://localhost:3000/health` — verify app is responding
 
 ### Production Environment Setup
 
@@ -53,68 +44,39 @@ Set these in GitHub repo settings → Secrets and variables → Actions:
 
 #### Production Server Setup
 
-1. Install Docker and Docker Compose
+1. Install Node.js 20
 2. Clone repo to `/opt/rental-system`
-3. Create `.env.production` with:
-   ```
-   DB_USER=rental
-   DB_PASSWORD=<strong-password>
-   ```
-4. Create SSL certificates directory: `mkdir -p ssl`
-5. Add Let's Encrypt certificates to `ssl/` directory
+3. Configure `.env.production` with `DATABASE_URL` and any other env vars
+4. Set up `rental-app` systemd service pointing to the SvelteKit build output
+5. Ensure PostgreSQL is running and accessible
 
-#### Docker Compose Production
+#### Health Check
+
+The app exposes a `/health` endpoint:
 
 ```bash
-cd /opt/rental-system
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-This starts:
-- PostgreSQL database with persistent volume
-- Nginx reverse proxy (port 80/443)
-- Two app instances (blue on :3000, green on :3001)
-
-#### Health Checks
-
-Each app instance exposes a `/health` endpoint for monitoring:
-
-```bash
-curl http://localhost:3000/health  # Blue
-curl http://localhost:3001/health  # Green
-```
-
-#### Manual Deployment Switch
-
-If needed, manually switch traffic without deploying:
-
-```bash
-ssh user@prod-server curl -X POST http://localhost/_admin/switch-deployment?slot=green
+curl http://localhost:3000/health
 ```
 
 ## Rollback
 
-Blue-green deployments make rollback simple:
+To roll back a bad deployment:
 
-1. If green deployment has issues, keep blue running (traffic stays there)
-2. SSH into prod and switch back: `curl -X POST http://localhost/_admin/switch-deployment?slot=blue`
-3. Investigate the issue before next deployment
+1. SSH into production server
+2. `cd /opt/rental-system`
+3. `git checkout <previous-commit>`
+4. `npm ci && npm run build`
+5. `sudo systemctl restart rental-app`
 
-## Monitoring
+## Future: Blue-Green Deployment
 
-Check deployment status:
+The repo contains infrastructure for blue-green deployment that is **not yet active**:
 
-```bash
-# Logs
-docker-compose -f docker-compose.prod.yml logs -f app-blue
-docker-compose -f docker-compose.prod.yml logs -f app-green
+- `docker-compose.prod.yml` — Two app instances (blue on :3000, green on :3001) behind Nginx
+- `nginx.conf` — Cookie-based traffic routing via `deployment_slot` cookie
+- `/_admin/switch-deployment` endpoint for manual traffic switching
 
-# Database
-docker-compose -f docker-compose.prod.yml exec db pg_dump -U rental rental_manager | gzip > backup.sql.gz
-
-# Traffic routing
-curl -i http://localhost/  # Check which instance responds
-```
+When ready to adopt this strategy, the deploy workflow will need to be updated to build Docker images and orchestrate the blue-green switch.
 
 ## Local Development
 
@@ -125,7 +87,7 @@ npm ci
 npm run dev
 ```
 
-This uses SQLite by default. For PostgreSQL locally:
+For PostgreSQL locally:
 
 ```bash
 docker-compose up -d

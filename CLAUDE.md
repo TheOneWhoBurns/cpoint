@@ -3,7 +3,7 @@
 A full-stack SvelteKit application for managing equipment rentals and point-of-sale operations with real-time inventory tracking, guide management, and shift-based operations.
 
 **Stack**: SvelteKit, TypeScript, PostgreSQL, Drizzle ORM, Material Web 3
-**Deployment**: Docker, Nginx reverse proxy (blue-green infrastructure configured, traffic switching not yet automated)
+**Deployment**: EC2 with systemd service, GitHub Actions deploys on push to `rental-system` (blue-green Docker/Nginx infra exists in repo but is not yet active)
 **Key Features**: Equipment rentals (tracked + generic items), guide management with cooldown, store sales, shift-based operations, Excel reporting
 
 ## Quick Links
@@ -15,7 +15,7 @@ For detailed architecture and module breakdown, see [docs/CODEBASE_MAP.md](docs/
 - **Frontend**: Svelte 5 components with Material Design 3 UI (tablet-optimized)
 - **Backend**: SvelteKit API routes with PostgreSQL + Drizzle ORM
 - **Database**: 13 core tables with JSONB hybrid approach for flexibility
-- **Deployment**: Blue-green strategy via Nginx reverse proxy, zero-downtime updates
+- **Deployment**: EC2 systemd service, auto-deployed via GitHub Actions on push to `rental-system`
 
 ## Main Pages
 
@@ -60,8 +60,8 @@ npm run db:studio  # Open database GUI
 
 ## Production
 
-Uses docker-compose.prod.yml with blue-green infrastructure:
-- Two app instances (blue/green) behind Nginx
-- Health checks on both instances (/health endpoint)
-- Deployment via GitHub Actions builds and deploys to green
-- Manual traffic switching: SSH to server and call admin endpoint to switch `deployment_slot` cookie
+Deployed to EC2 via GitHub Actions on push to `rental-system`:
+- Single Node.js process managed by systemd (`rental-app` service)
+- App runs on port 3000, health check at `/health`
+- Deploy workflow: `git pull` → `npm ci` → `npm run build` → `npm run db:push` → `systemctl restart`
+- Blue-green Docker/Nginx infrastructure exists in repo for future use but is not yet active

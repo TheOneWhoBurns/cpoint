@@ -172,7 +172,7 @@
 
 	.modal-actions {
 		display: flex;
-		gap: var(--md-sys-spacing-sm);
+		gap: var(--md-sys-spacing-md);
 		justify-content: flex-end;
 		padding: var(--md-sys-spacing-lg);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
