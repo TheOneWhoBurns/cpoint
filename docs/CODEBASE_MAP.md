@@ -13,7 +13,7 @@ total_tokens: 47450
 A full-stack SvelteKit application for managing equipment rentals and store sales with real-time inventory tracking, guide management, and shift-based operations. Built with PostgreSQL, Drizzle ORM, and Material Web 3 components.
 
 **Stack**: SvelteKit, TypeScript, PostgreSQL, Drizzle ORM, Material Web
-**Deployment**: Docker, Nginx reverse proxy (blue-green configured but traffic switching not implemented)
+**Deployment**: EC2 systemd service, GitHub Actions auto-deploys on push to `rental-system` (blue-green Docker/Nginx infra in repo but not yet active)
 **Architecture**: Server-side rendering with SvelteKit, RESTful API, real-time inventory
 **Purpose**: Tablet-optimized point-of-sale and rental management system
 
@@ -139,13 +139,13 @@ cpoint/
 │   └── CODEBASE_MAP.md                  # This file
 ├── .github/workflows/
 │   ├── ci.yml                           # Lint, type, build checks
-│   └── deploy.yml                       # Blue-green deployment
+│   └── deploy.yml                       # EC2 systemd deployment
 ├── .claude/
 │   └── settings.local.json              # Claude Code permissions
 ├── Dockerfile                           # Multi-stage build
 ├── docker-compose.yml                   # Dev: PostgreSQL
-├── docker-compose.prod.yml              # Prod: blue-green + nginx
-├── nginx.conf                           # Reverse proxy config
+├── docker-compose.prod.yml              # Future: blue-green + nginx (not yet active)
+├── nginx.conf                           # Future: reverse proxy config (not yet active)
 ├── drizzle.config.ts                    # Migration config
 ├── svelte.config.js                     # SvelteKit config
 ├── tsconfig.json                        # TypeScript config
@@ -349,10 +349,10 @@ cpoint/
 
 #### CI/CD Pipeline
 - **ci.yml**: Lint → Type → Test → Build (build must pass)
-- **deploy.yml**: Build → SSH → Deploy green → Health check (traffic switching not implemented yet)
+- **deploy.yml**: SSH → git pull → npm ci → build → db:push → systemctl restart → health check
 
-#### Reverse Proxy
-- **nginx.conf**: Blue-green routing template via `deployment_slot` cookie, SSL termination, gzip (infrastructure ready, traffic switching not automated)
+#### Reverse Proxy (Future)
+- **nginx.conf**: Blue-green routing template via `deployment_slot` cookie, SSL termination, gzip (not yet active in production)
 
 ## Data Flow
 
@@ -508,11 +508,10 @@ Example:
 - Real-time updates not implemented (polling-based)
 
 ### Deployment
-- Blue-green infrastructure configured (docker-compose.prod.yml with app-blue/app-green)
-- Health checks via /health endpoint
-- Database backups via pg_dump (7-day retention)
-- Nginx routing template ready via `deployment_slot` cookie
-- Manual traffic switching via admin endpoint (not yet automated)
+- Production runs on EC2 as a systemd service (`rental-app`)
+- Auto-deployed via GitHub Actions on push to `rental-system`
+- Health checks via /health endpoint on port 3000
+- Blue-green Docker/Nginx infrastructure exists in repo for future use (not yet active)
 
 ## Navigation Guide
 
@@ -546,11 +545,11 @@ Example:
 3. Store prices as cents in database
 
 ### To deploy:
-1. Push to `main` branch
-2. GitHub Actions triggers ci.yml (checks)
-3. If passing, deploy.yml runs (builds image, deploys to green, health checks)
-4. Manual traffic switch: SSH to production and use admin endpoint to set `deployment_slot=green`
-5. Rollback: Set `deployment_slot=blue` to revert traffic
+1. Merge PR or push to `rental-system` branch
+2. GitHub Actions triggers ci.yml (checks) and deploy.yml (deployment)
+3. deploy.yml SSHs into EC2, pulls code, builds, restarts systemd service
+4. Health check verifies app is responding on port 3000
+5. Rollback: SSH to server, `git checkout <previous-commit>`, rebuild, restart
 
 ## Tech Stack Details
 
@@ -569,10 +568,9 @@ Example:
 
 ## Project Status
 
-**Phase**: Core features complete, deployment automation incomplete
-**Last Updated**: 2026-01-04 (from commit)
+**Phase**: Core features complete, deployed to production
+**Last Updated**: 2026-01-30
 **Current Branch**: rental-system
-**Deployment**: Blue-green infrastructure configured, manual traffic switching
+**Deployment**: EC2 systemd service, auto-deployed via GitHub Actions
 **Key Features**: Equipment rentals, guide management, store sales, shift-based operations
-**Limitations**: Blue-green traffic switching not automated in CI/CD
-**Next Steps**: Automate traffic switching in deploy.yml, real-time updates (SSE), PWA, Odoo integration
+**Future**: Blue-green Docker/Nginx deployment, real-time updates (SSE), PWA, Odoo integration
