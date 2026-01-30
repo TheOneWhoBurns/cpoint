@@ -915,12 +915,16 @@
 		position: sticky;
 		top: 0;
 		z-index: 10;
+		overflow: visible;
 	}
 
 	.header-start {
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
+		min-width: 0;
+		flex-shrink: 1;
+		overflow: hidden;
 	}
 
 	.header-icon {
@@ -931,12 +935,16 @@
 	.header-start h1 {
 		margin: 0;
 		color: var(--md-sys-color-on-surface);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.header-end {
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-md);
+		flex-shrink: 0;
 	}
 
 	.header-error {
@@ -965,6 +973,15 @@
 
 	.operator-badge .material-symbols-rounded {
 		font-size: 20px;
+	}
+
+	/* Ensure Material Web buttons never clip their content */
+	.app-header md-outlined-button,
+	.app-header md-filled-button,
+	.action-bar md-filled-button,
+	.action-bar md-filled-tonal-button {
+		flex-shrink: 0;
+		white-space: nowrap;
 	}
 
 	/* Main Content */
@@ -1314,7 +1331,9 @@
 		max-width: 500px;
 		width: 100%;
 		max-height: 90vh;
-		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 		animation: md-animate-scale-in 0.3s var(--md-sys-motion-easing-emphasized-decelerate);
 	}
 
@@ -1328,10 +1347,8 @@
 		align-items: center;
 		padding: var(--md-sys-spacing-lg);
 		border-bottom: 1px solid var(--md-sys-color-outline-variant);
-		position: sticky;
-		top: 0;
 		background: var(--md-sys-color-surface);
-		z-index: 1;
+		flex-shrink: 0;
 	}
 
 	.modal-title {
@@ -1352,10 +1369,13 @@
 	}
 
 	.modal-body {
-		padding: var(--md-sys-spacing-lg) var(--md-sys-spacing-lg) var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		padding: var(--md-sys-spacing-lg);
 		display: flex;
 		flex-direction: column;
 		gap: var(--md-sys-spacing-xl);
+		overflow-y: auto;
+		flex: 1;
+		min-height: 0;
 	}
 
 	.modal-footer {
@@ -1365,10 +1385,8 @@
 		gap: var(--md-sys-spacing-lg);
 		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg) var(--md-sys-spacing-lg);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
-		position: sticky;
-		bottom: 0;
 		background: var(--md-sys-color-surface);
-		flex-wrap: wrap;
+		flex-shrink: 0;
 	}
 
 	.modal-footer md-outlined-button,
@@ -1700,7 +1718,8 @@
 	}
 
 	.summary-section.totals {
-		background: var(--md-sys-color-primary-container);
+		background: var(--md-sys-color-secondary-container);
+		border: 2px solid var(--md-sys-color-primary);
 	}
 
 	.summary-header {
@@ -1720,7 +1739,7 @@
 	}
 
 	.summary-section.totals .summary-header .material-symbols-rounded {
-		color: var(--md-sys-color-on-primary-container);
+		color: var(--md-sys-color-on-secondary-container);
 	}
 
 	.summary-row {
@@ -1739,11 +1758,11 @@
 	}
 
 	.summary-row.total .md-headline-small {
-		color: var(--md-sys-color-on-primary-container);
+		color: var(--md-sys-color-on-secondary-container);
 	}
 
 	.summary-section.totals .summary-row .md-body-medium {
-		color: var(--md-sys-color-on-primary-container);
+		color: var(--md-sys-color-on-secondary-container);
 	}
 
 	/* Danger Button */

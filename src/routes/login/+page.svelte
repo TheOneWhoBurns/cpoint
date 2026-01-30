@@ -205,6 +205,7 @@
 		background: var(--md-sys-color-surface);
 		border-radius: var(--md-sys-shape-corner-extra-large);
 		box-shadow: var(--md-sys-elevation-level3);
+		overflow: hidden;
 	}
 
 	/* Header */
@@ -286,6 +287,7 @@
 		border-radius: var(--md-sys-shape-corner-medium);
 		cursor: pointer;
 		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+		overflow: hidden;
 	}
 
 	.operator-card:hover {
@@ -328,6 +330,10 @@
 	.operator-name {
 		color: var(--md-sys-color-on-surface);
 		text-align: center;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 100%;
 	}
 
 	.operator-card.selected .operator-name {
@@ -404,8 +410,14 @@
 	.actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: var(--md-sys-spacing-sm);
+		gap: var(--md-sys-spacing-md);
 		margin-top: var(--md-sys-spacing-sm);
+	}
+
+	.actions md-outlined-button,
+	.actions md-filled-button {
+		flex-shrink: 0;
+		white-space: nowrap;
 	}
 
 	.actions md-filled-button {
