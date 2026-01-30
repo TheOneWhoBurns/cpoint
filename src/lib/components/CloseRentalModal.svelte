@@ -311,13 +311,20 @@
 
 	.modal-footer {
 		display: flex;
-		gap: var(--md-sys-spacing-md);
+		gap: var(--md-sys-spacing-lg);
 		justify-content: flex-end;
-		padding: var(--md-sys-spacing-lg);
+		align-items: center;
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg) var(--md-sys-spacing-lg);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
 		position: sticky;
 		bottom: 0;
 		background: var(--md-sys-color-surface);
+		flex-wrap: wrap;
+	}
+
+	.modal-footer md-outlined-button,
+	.modal-footer md-filled-button {
+		min-width: auto;
 	}
 
 	/* Rental Summary Card */
@@ -357,14 +364,16 @@
 	.section-header {
 		display: flex;
 		align-items: center;
-		gap: var(--md-sys-spacing-xs);
+		gap: var(--md-sys-spacing-sm);
 		color: var(--md-sys-color-on-surface);
-		margin-bottom: var(--md-sys-spacing-xs);
+		margin-bottom: var(--md-sys-spacing-md);
+		font: var(--md-sys-typescale-title-small);
 	}
 
 	.section-header .material-symbols-rounded {
-		font-size: 20px;
+		font-size: 24px;
 		color: var(--md-sys-color-primary);
+		flex-shrink: 0;
 	}
 
 	/* Condition Card */

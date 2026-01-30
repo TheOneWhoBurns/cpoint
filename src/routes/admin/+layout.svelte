@@ -284,7 +284,7 @@
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			gap: 2px;
+			gap: var(--md-sys-spacing-xs);
 			padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 			color: var(--md-sys-color-on-surface-variant);
 			text-decoration: none;

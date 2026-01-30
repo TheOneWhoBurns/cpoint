@@ -352,7 +352,7 @@
 	.badge {
 		background: var(--md-sys-color-secondary-container);
 		color: var(--md-sys-color-on-secondary-container);
-		padding: 4px 12px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		border-radius: var(--md-sys-shape-corner-full);
 	}
 
@@ -443,7 +443,7 @@
 	/* Category Badge */
 	.category-badge {
 		display: inline-block;
-		padding: 4px 10px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-tertiary-container);
 		color: var(--md-sys-color-on-tertiary-container);
 		border-radius: var(--md-sys-shape-corner-small);
@@ -469,7 +469,7 @@
 
 	.quantity-input {
 		width: 70px;
-		padding: 8px;
+		padding: var(--md-sys-spacing-sm);
 		border: 1px solid var(--md-sys-color-outline);
 		border-radius: var(--md-sys-shape-corner-small);
 		font-size: 0.875rem;
@@ -481,7 +481,7 @@
 	.out-of-stock {
 		font: var(--md-sys-typescale-label-small);
 		color: var(--md-sys-color-error);
-		padding: 2px 8px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-error-container);
 		border-radius: var(--md-sys-shape-corner-small);
 	}
@@ -489,7 +489,7 @@
 	.low-stock {
 		font: var(--md-sys-typescale-label-small);
 		color: var(--md-sys-color-warning);
-		padding: 2px 8px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-warning-container);
 		border-radius: var(--md-sys-shape-corner-small);
 	}
