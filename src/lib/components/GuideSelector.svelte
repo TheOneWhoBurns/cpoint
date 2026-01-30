@@ -220,7 +220,7 @@
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--md-sys-spacing-xs);
 	}
 
 	.guide-info .md-title-medium {
@@ -230,7 +230,7 @@
 	.status-badge {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--md-sys-spacing-xs);
 		width: fit-content;
 	}
 
@@ -283,8 +283,8 @@
 		margin-left: auto;
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		padding: 4px 8px;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		background: var(--md-sys-color-error-container);
 		color: var(--md-sys-color-on-error-container);
 		border-radius: var(--md-sys-shape-corner-small);
@@ -329,7 +329,7 @@
 	.override-info {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--md-sys-spacing-xs);
 		color: var(--md-sys-color-on-warning-container);
 	}
 
