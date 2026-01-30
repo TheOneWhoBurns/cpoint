@@ -334,8 +334,8 @@ body {
 .md-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	padding: 6px 16px;
+	gap: var(--md-sys-spacing-sm);
+	padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 	border-radius: var(--md-sys-shape-corner-small);
 	font: var(--md-sys-typescale-label-large);
 	border: 1px solid var(--md-sys-color-outline);

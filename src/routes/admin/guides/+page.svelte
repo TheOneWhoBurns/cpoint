@@ -329,7 +329,7 @@
 	.badge {
 		background: var(--md-sys-color-secondary-container);
 		color: var(--md-sys-color-on-secondary-container);
-		padding: 4px 12px;
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		border-radius: var(--md-sys-shape-corner-full);
 	}
 
