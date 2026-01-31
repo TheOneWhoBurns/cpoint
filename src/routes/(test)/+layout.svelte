@@ -1,0 +1,36 @@
+<script lang="ts">
+	import '../../app.css';
+
+	let { children } = $props();
+</script>
+
+<svelte:head>
+	<!-- Local Material Symbols font for testing without Google CDN -->
+	<style>
+		@font-face {
+			font-family: 'Material Symbols Rounded';
+			font-style: normal;
+			font-weight: 100 700;
+			src: url('/material-symbols-rounded.woff2') format('woff2');
+		}
+		.material-symbols-rounded {
+			font-family: 'Material Symbols Rounded';
+			font-weight: normal;
+			font-style: normal;
+			font-size: 24px;
+			line-height: 1;
+			letter-spacing: normal;
+			text-transform: none;
+			display: inline-block;
+			white-space: nowrap;
+			word-wrap: normal;
+			direction: ltr;
+			-webkit-font-smoothing: antialiased;
+			-moz-osx-font-smoothing: grayscale;
+			text-rendering: optimizeLegibility;
+			font-feature-settings: 'liga';
+		}
+	</style>
+</svelte:head>
+
+{@render children()}

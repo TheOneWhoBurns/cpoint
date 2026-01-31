@@ -415,8 +415,10 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: center;
 		gap: var(--md-sys-spacing-xs);
-		padding: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		min-height: 64px;
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-small);
 		cursor: pointer;
@@ -520,6 +522,7 @@
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
 		padding: var(--md-sys-spacing-md);
+		min-height: 56px;
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-medium);
 		cursor: pointer;
@@ -556,6 +559,7 @@
 	.payment-option .material-symbols-rounded {
 		font-size: 24px;
 		color: var(--md-sys-color-primary);
+		flex-shrink: 0;
 	}
 
 	.payment-option.selected .material-symbols-rounded {

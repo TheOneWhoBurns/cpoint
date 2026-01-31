@@ -377,18 +377,27 @@ body {
 
 /*
  * Material Web component alignment fix
- * Custom elements render with inconsistent baseline/vertical positioning,
- * causing a "staircase" effect when placed inline or in flex rows.
- * Setting vertical-align: middle on all button/icon-button host elements
- * normalizes their alignment relative to siblings.
+ * Custom elements render as inline by default with inconsistent baseline
+ * positioning, causing a "staircase" effect in both inline and flex contexts.
+ * - display: inline-flex ensures they participate properly in flex layouts
+ * - vertical-align: middle fixes inline context alignment
+ * - Explicit height prevents inconsistent sizing between button variants
  * See: https://github.com/material-components/material-web/issues/626
  */
 md-filled-button,
 md-outlined-button,
 md-text-button,
-md-filled-tonal-button,
-md-icon-button {
+md-filled-tonal-button {
+	display: inline-flex;
 	vertical-align: middle;
+	height: 40px;
+}
+
+md-icon-button {
+	display: inline-flex;
+	vertical-align: middle;
+	height: 40px;
+	width: 40px;
 }
 
 /* Icon sizes */

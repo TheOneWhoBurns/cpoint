@@ -962,10 +962,11 @@
 	}
 
 	.operator-badge {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-xs);
 		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-md);
+		height: 40px;
 		background: var(--md-sys-color-primary-container);
 		color: var(--md-sys-color-on-primary-container);
 		border-radius: var(--md-sys-shape-corner-full);
@@ -1007,11 +1008,12 @@
 	}
 
 	.stat-badge {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-xs);
 		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
 		border-radius: var(--md-sys-shape-corner-small);
+		height: 40px;
 	}
 
 	.stat-badge.active {
@@ -1559,10 +1561,12 @@
 	}
 
 	.tracked-item-btn {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: var(--md-sys-spacing-xs);
 		padding: var(--md-sys-spacing-sm);
+		min-height: 40px;
 		background: var(--md-sys-color-surface);
 		border: 1px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-small);
@@ -1587,6 +1591,7 @@
 
 	.tracked-item-btn .material-symbols-rounded {
 		font-size: 18px;
+		flex-shrink: 0;
 	}
 
 	.no-items {
@@ -1648,6 +1653,7 @@
 		align-items: center;
 		gap: var(--md-sys-spacing-sm);
 		padding: var(--md-sys-spacing-md);
+		min-height: 56px;
 		background: var(--md-sys-color-surface-container-low);
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-medium);
@@ -1684,6 +1690,7 @@
 	.type-option .material-symbols-rounded {
 		font-size: 24px;
 		color: var(--md-sys-color-primary);
+		flex-shrink: 0;
 	}
 
 	.type-info {
