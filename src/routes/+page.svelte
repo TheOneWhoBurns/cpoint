@@ -1564,9 +1564,9 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		gap: var(--md-sys-spacing-xs);
-		padding: var(--md-sys-spacing-sm);
-		min-height: 40px;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		min-height: 44px;
 		background: var(--md-sys-color-surface);
 		border: 1px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-small);
@@ -1651,9 +1651,9 @@
 		flex: 1;
 		display: flex;
 		align-items: center;
-		gap: var(--md-sys-spacing-sm);
-		padding: var(--md-sys-spacing-md);
-		min-height: 56px;
+		gap: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		min-height: 60px;
 		background: var(--md-sys-color-surface-container-low);
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-medium);
