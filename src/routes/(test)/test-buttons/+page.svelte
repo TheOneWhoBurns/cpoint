@@ -447,7 +447,7 @@
 	}
 
 	.tracked-item-btn .material-symbols-rounded {
-		font-size: 18px;
+		font-size: 20px;
 		flex-shrink: 0;
 	}
 
