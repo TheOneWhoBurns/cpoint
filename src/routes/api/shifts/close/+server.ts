@@ -22,6 +22,12 @@ interface Pricing {
 	hourly?: number;
 	fullDay?: number;
 	paymentMethod?: string;
+	cashPaid?: number;
+	creditPaid?: number;
+	yetToPay?: number;
+	discount?: number;
+	calculatedPrice?: number;
+	finalPrice?: number;
 }
 
 export const POST: RequestHandler = async ({ cookies }) => {
@@ -95,6 +101,12 @@ export const POST: RequestHandler = async ({ cookies }) => {
 			? Math.round((new Date(r.returnedAt).getTime() - new Date(r.startedAt).getTime()) / 60000)
 			: null;
 
+		// Handle both old and new pricing format
+		const cashPaid = pricing?.cashPaid ?? (pricing?.paymentMethod === 'cash' ? (pricing?.total || 0) : 0);
+		const creditPaid = pricing?.creditPaid ?? (pricing?.paymentMethod === 'credit' ? (pricing?.total || 0) : 0);
+		const yetToPay = pricing?.yetToPay ?? 0;
+		const discount = pricing?.discount ?? 0;
+
 		return {
 			'Customer': customer?.name || 'Unknown',
 			'Hotel': customer?.hotel || '',
@@ -104,33 +116,58 @@ export const POST: RequestHandler = async ({ cookies }) => {
 			'Start': new Date(r.startedAt).toLocaleString(),
 			'End': r.returnedAt ? new Date(r.returnedAt).toLocaleString() : 'Active',
 			'Duration (min)': duration || 'N/A',
-			'Total ($)': pricing?.total || 0,
-			'Payment': pricing?.paymentMethod === 'credit' ? 'Credit' : 'Cash',
+			'Price ($)': pricing?.calculatedPrice ?? pricing?.total ?? 0,
+			'Discount ($)': discount,
+			'Final ($)': pricing?.finalPrice ?? pricing?.total ?? 0,
+			'Cash ($)': cashPaid,
+			'Credit ($)': creditPaid,
+			'Unpaid ($)': yetToPay,
 			'Status': r.status
 		};
 	});
 
+	// Calculate totals
 	const cashTotal = shiftRentals.reduce((sum, r) => {
 		const pricing = r.pricing as Pricing;
-		return sum + (pricing?.paymentMethod !== 'credit' ? (pricing?.total || 0) : 0);
+		return sum + (pricing?.cashPaid ?? (pricing?.paymentMethod === 'cash' ? (pricing?.total || 0) : 0));
 	}, 0);
 	const creditTotal = shiftRentals.reduce((sum, r) => {
 		const pricing = r.pricing as Pricing;
-		return sum + (pricing?.paymentMethod === 'credit' ? (pricing?.total || 0) : 0);
+		return sum + (pricing?.creditPaid ?? (pricing?.paymentMethod === 'credit' ? (pricing?.total || 0) : 0));
+	}, 0);
+	const unpaidTotal = shiftRentals.reduce((sum, r) => {
+		const pricing = r.pricing as Pricing;
+		return sum + (pricing?.yetToPay ?? 0);
+	}, 0);
+	const discountTotal = shiftRentals.reduce((sum, r) => {
+		const pricing = r.pricing as Pricing;
+		return sum + (pricing?.discount ?? 0);
+	}, 0);
+	const priceTotal = shiftRentals.reduce((sum, r) => {
+		const pricing = r.pricing as Pricing;
+		return sum + (pricing?.calculatedPrice ?? pricing?.total ?? 0);
+	}, 0);
+	const finalTotal = shiftRentals.reduce((sum, r) => {
+		const pricing = r.pricing as Pricing;
+		return sum + (pricing?.finalPrice ?? pricing?.total ?? 0);
 	}, 0);
 
 	excelData.push({
-		'Customer': '',
+		'Customer': 'TOTALS',
 		'Hotel': '',
 		'Phone': '',
-		'Items': '',
+		'Items': `${shiftRentals.length} rentals`,
 		'Type': '',
 		'Start': '',
 		'End': '',
-		'Duration (min)': 'TOTALS:',
-		'Total ($)': rentalRevenue,
-		'Payment': `Cash: $${cashTotal} / Credit: $${creditTotal}`,
-		'Status': `${shiftRentals.length} rentals`
+		'Duration (min)': '' as any,
+		'Price ($)': priceTotal,
+		'Discount ($)': discountTotal,
+		'Final ($)': finalTotal,
+		'Cash ($)': cashTotal,
+		'Credit ($)': creditTotal,
+		'Unpaid ($)': unpaidTotal,
+		'Status': ''
 	});
 
 	const salesData = shiftSales.map(s => ({
@@ -149,8 +186,37 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		'Time': `${shiftSales.length} sales`
 	});
 
-	const ws = XLSX.utils.json_to_sheet(excelData);
+	// Store sales cash/credit split (assuming all store sales are cash for now, can be enhanced)
+	const storeSalesCash = salesRevenue / 100; // Convert from cents to dollars
+	const storeSalesCredit = 0; // Would need to track payment method for store sales
+
+	// Create summary/small box data
+	const summaryData = [
+		{ 'Category': 'RENTALS', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Collected Cash', 'Cash ($)': cashTotal.toFixed(2), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Collected Credit', 'Cash ($)': '', 'Credit ($)': creditTotal.toFixed(2), 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Unpaid (Yet to Pay)', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': '' },
+		{ 'Category': 'Discounts Given', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': discountTotal.toFixed(2) },
+		{ 'Category': 'Rental Subtotal', 'Cash ($)': cashTotal.toFixed(2), 'Credit ($)': creditTotal.toFixed(2), 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': finalTotal.toFixed(2) },
+		{ 'Category': '', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'STORE SALES', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Store Sales Total', 'Cash ($)': storeSalesCash.toFixed(2), 'Credit ($)': storeSalesCredit.toFixed(2), 'Unpaid ($)': '0.00', 'Total ($)': (salesRevenue / 100).toFixed(2) },
+		{ 'Category': '', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'SMALL BOX SUMMARY', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Total Cash Collected', 'Cash ($)': (cashTotal + storeSalesCash).toFixed(2), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Total Credit Collected', 'Cash ($)': '', 'Credit ($)': (creditTotal + storeSalesCredit).toFixed(2), 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Total Unpaid', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': '' },
+		{ 'Category': 'GRAND TOTAL', 'Cash ($)': (cashTotal + storeSalesCash).toFixed(2), 'Credit ($)': (creditTotal + storeSalesCredit).toFixed(2), 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': (finalTotal + salesRevenue / 100).toFixed(2) },
+	];
+
 	const wb = XLSX.utils.book_new();
+
+	// Add Summary sheet first
+	const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+	XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+	// Add Rentals sheet
+	const ws = XLSX.utils.json_to_sheet(excelData);
 	XLSX.utils.book_append_sheet(wb, ws, 'Rentals');
 
 	if (shiftSales.length > 0) {

@@ -4,6 +4,7 @@
 	import '@material/web/iconbutton/icon-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
 	import '@material/web/radio/radio.js';
+	import '@material/web/checkbox/checkbox.js';
 
 	interface RentalItem {
 		type: string;
@@ -19,12 +20,13 @@
 		items: RentalItem[];
 		customer?: { name?: string };
 		startedAt: string;
-		pricing?: { type?: string };
+		pricing?: { type?: string; hourly?: number; fullDay?: number };
 	}
 
 	let {
 		open = $bindable(false),
 		rental,
+		operatorPasscode = '',
 		onClose = () => {},
 		onCancel = () => {}
 	} = $props();
@@ -32,21 +34,99 @@
 	let trackedConditions = $state<Record<number, string>>({});
 	let genericReturns = $state<Record<number, number>>({});
 	let notes = $state('');
-	let paymentMethod = $state<'cash' | 'credit'>('cash');
 	let loading = $state(false);
+
+	// Split payment
+	let cashAmount = $state(0);
+	let creditAmount = $state(0);
+
+	// Discount and yet-to-pay (require passcode)
+	let discountAmount = $state(0);
+	let yetToPay = $state(false);
+	let yetToPayAmount = $state(0);
+	let passcodeInput = $state('');
+	let passcodeVerified = $state(false);
+	let passcodeError = $state('');
+
+	// Calculate price based on rental type and elapsed time
+	function calculatePrice(): number {
+		if (!rental?.pricing) return 0;
+		const pricing = rental.pricing;
+
+		if (pricing.type === 'fullDay') {
+			return pricing.fullDay || 0;
+		} else if (pricing.type === 'hourly') {
+			const startTime = new Date(rental.startedAt).getTime();
+			const endTime = new Date().getTime();
+			const diffMs = endTime - startTime;
+			const diffMinutes = Math.floor(diffMs / (1000 * 60));
+			const hourlyRate = pricing.hourly || 0;
+
+			if (diffMinutes < 60) {
+				return hourlyRate;
+			} else {
+				const hours = Math.ceil(diffMinutes / 60);
+				return hourlyRate * hours;
+			}
+		}
+		return 0;
+	}
+
+	const calculatedPrice = $derived(calculatePrice());
+	const priceAfterDiscount = $derived(Math.max(0, calculatedPrice - discountAmount));
+	const amountDue = $derived(priceAfterDiscount - (yetToPay ? yetToPayAmount : 0));
+	const paymentTotal = $derived(cashAmount + creditAmount);
+	const remainingToPay = $derived(amountDue - paymentTotal);
+
+	// Auto-fill cash amount when modal opens
+	$effect(() => {
+		if (open && rental) {
+			const price = calculatePrice();
+			cashAmount = price;
+			creditAmount = 0;
+			discountAmount = 0;
+			yetToPay = false;
+			yetToPayAmount = 0;
+			passcodeInput = '';
+			passcodeVerified = false;
+			passcodeError = '';
+		}
+	});
+
+	function verifyPasscode() {
+		if (passcodeInput === operatorPasscode) {
+			passcodeVerified = true;
+			passcodeError = '';
+		} else {
+			passcodeError = 'Invalid passcode';
+			passcodeVerified = false;
+		}
+	}
 
 	function resetForm() {
 		trackedConditions = {};
 		genericReturns = {};
 		notes = '';
-		paymentMethod = 'cash';
+		cashAmount = 0;
+		creditAmount = 0;
+		discountAmount = 0;
+		yetToPay = false;
+		yetToPayAmount = 0;
+		passcodeInput = '';
+		passcodeVerified = false;
+		passcodeError = '';
 	}
 
 	function handleClose() {
+		// Validate payment amounts
+		if (remainingToPay > 0.01 && !yetToPay) {
+			return; // Don't close if payment doesn't cover amount
+		}
+
 		loading = true;
 		const returnData = {
 			trackedConditions: Object.entries(trackedConditions).map(([itemId, condition]) => {
-				const item = rental?.items.find(i => i.itemId === parseInt(itemId));
+				const item = rental?.items.find((i: RentalItem) => i.itemId === parseInt(itemId));
 				return {
 					itemId: parseInt(itemId),
 					condition,
@@ -58,7 +138,13 @@
 				quantityReturned
 			})),
 			notes,
-			paymentMethod
+			// Split payment data
+			cashAmount,
+			creditAmount,
+			discount: discountAmount,
+			yetToPay: yetToPay ? yetToPayAmount : 0,
+			calculatedPrice,
+			finalPrice: priceAfterDiscount
 		};
 		onClose(returnData);
 		resetForm();
@@ -93,6 +179,16 @@
 		const mins = diff % 60;
 		if (hours > 0) return `${hours}h ${mins}m`;
 		return `${mins}m`;
+	}
+
+	function getHoursCharged(): number {
+		if (!rental?.pricing || rental.pricing.type !== 'hourly') return 0;
+		const startTime = new Date(rental.startedAt).getTime();
+		const endTime = new Date().getTime();
+		const diffMs = endTime - startTime;
+		const diffMinutes = Math.floor(diffMs / (1000 * 60));
+		if (diffMinutes < 60) return 1;
+		return Math.ceil(diffMinutes / 60);
 	}
 </script>
 
@@ -205,24 +301,189 @@
 					{/each}
 				</div>
 
-				<!-- Payment Method Section -->
+				<!-- Pricing Summary Section -->
+				<div class="section pricing-summary">
+					<div class="section-header">
+						<span class="material-symbols-rounded">receipt</span>
+						<span class="md-title-small">Pricing Summary</span>
+					</div>
+					<div class="pricing-card">
+						<div class="pricing-row">
+							<span class="md-body-medium">
+								{rental.pricing?.type === 'hourly'
+									? `${getHoursCharged()} hour${getHoursCharged() > 1 ? 's' : ''} @ $${rental.pricing?.hourly}/hr`
+									: 'Full Day Rate'}
+							</span>
+							<span class="md-title-medium">${calculatedPrice.toFixed(2)}</span>
+						</div>
+						{#if discountAmount > 0}
+							<div class="pricing-row discount">
+								<span class="md-body-medium">Discount</span>
+								<span class="md-title-medium">-${discountAmount.toFixed(2)}</span>
+							</div>
+						{/if}
+						{#if yetToPay && yetToPayAmount > 0}
+							<div class="pricing-row unpaid">
+								<span class="md-body-medium">Yet to Pay (Unpaid)</span>
+								<span class="md-title-medium">-${yetToPayAmount.toFixed(2)}</span>
+							</div>
+						{/if}
+						<div class="pricing-row total">
+							<span class="md-title-medium">Amount Due Now</span>
+							<span class="md-headline-small">${amountDue.toFixed(2)}</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Split Payment Section -->
 				<div class="section">
 					<div class="section-header">
 						<span class="material-symbols-rounded">payments</span>
-						<span class="md-title-small">Payment Method</span>
+						<span class="md-title-small">Payment (Split Cash/Credit)</span>
 					</div>
-					<div class="payment-options">
-						<label class="payment-option" class:selected={paymentMethod === 'cash'}>
-							<input type="radio" bind:group={paymentMethod} value="cash" disabled={loading} />
-							<span class="material-symbols-rounded">payments</span>
-							<span class="md-label-large">Cash</span>
-						</label>
-						<label class="payment-option" class:selected={paymentMethod === 'credit'}>
-							<input type="radio" bind:group={paymentMethod} value="credit" disabled={loading} />
-							<span class="material-symbols-rounded">credit_card</span>
-							<span class="md-label-large">Credit</span>
-						</label>
+					<div class="payment-inputs">
+						<div class="payment-input-group">
+							<label class="payment-input-label">
+								<span class="material-symbols-rounded">payments</span>
+								<span class="md-body-medium">Cash</span>
+							</label>
+							<div class="amount-input-wrapper">
+								<span class="currency-symbol">$</span>
+								<input
+									type="number"
+									min="0"
+									step="0.01"
+									bind:value={cashAmount}
+									disabled={loading}
+									class="amount-input"
+								/>
+							</div>
+						</div>
+						<div class="payment-input-group">
+							<label class="payment-input-label">
+								<span class="material-symbols-rounded">credit_card</span>
+								<span class="md-body-medium">Credit Card</span>
+							</label>
+							<div class="amount-input-wrapper">
+								<span class="currency-symbol">$</span>
+								<input
+									type="number"
+									min="0"
+									step="0.01"
+									bind:value={creditAmount}
+									disabled={loading}
+									class="amount-input"
+								/>
+							</div>
+						</div>
 					</div>
+					<div class="payment-summary">
+						<div class="payment-summary-row">
+							<span class="md-body-medium">Total Payment</span>
+							<span class="md-title-medium">${paymentTotal.toFixed(2)}</span>
+						</div>
+						{#if remainingToPay > 0.01}
+							<div class="payment-summary-row remaining">
+								<span class="md-body-medium">Remaining</span>
+								<span class="md-title-medium error">${remainingToPay.toFixed(2)}</span>
+							</div>
+						{:else if remainingToPay < -0.01}
+							<div class="payment-summary-row change">
+								<span class="md-body-medium">Change Due</span>
+								<span class="md-title-medium">${Math.abs(remainingToPay).toFixed(2)}</span>
+							</div>
+						{:else}
+							<div class="payment-summary-row complete">
+								<span class="material-symbols-rounded">check_circle</span>
+								<span class="md-body-medium">Payment Complete</span>
+							</div>
+						{/if}
+					</div>
+				</div>
+
+				<!-- Discount & Yet-to-Pay Section (requires passcode) -->
+				<div class="section special-options">
+					<div class="section-header">
+						<span class="material-symbols-rounded">tune</span>
+						<span class="md-title-small">Discount / Yet to Pay</span>
+						<span class="passcode-required-badge">Passcode Required</span>
+					</div>
+
+					{#if !passcodeVerified}
+						<div class="passcode-entry">
+							<p class="md-body-small">Enter your passcode to apply discount or mark as partially unpaid</p>
+							<div class="passcode-input-row">
+								<input
+									type="password"
+									maxlength="4"
+									placeholder="4-digit passcode"
+									bind:value={passcodeInput}
+									class="passcode-input"
+								/>
+								<md-filled-button onclick={verifyPasscode} disabled={passcodeInput.length !== 4}>
+									Verify
+								</md-filled-button>
+							</div>
+							{#if passcodeError}
+								<p class="passcode-error md-body-small">{passcodeError}</p>
+							{/if}
+						</div>
+					{:else}
+						<div class="special-options-unlocked">
+							<div class="option-row">
+								<label class="option-label">
+									<span class="material-symbols-rounded">percent</span>
+									<span class="md-body-medium">Discount Amount</span>
+								</label>
+								<div class="amount-input-wrapper small">
+									<span class="currency-symbol">$</span>
+									<input
+										type="number"
+										min="0"
+										max={calculatedPrice}
+										step="0.01"
+										bind:value={discountAmount}
+										disabled={loading}
+										class="amount-input"
+									/>
+								</div>
+							</div>
+							<div class="option-row">
+								<label class="yet-to-pay-checkbox">
+									<md-checkbox
+										checked={yetToPay}
+										onchange={(e: Event) => yetToPay = (e.target as HTMLInputElement).checked}
+										disabled={loading}
+									></md-checkbox>
+									<span class="material-symbols-rounded">schedule_send</span>
+									<span class="md-body-medium">Mark as partially unpaid (yet to pay)</span>
+								</label>
+							</div>
+							{#if yetToPay}
+								<div class="option-row indent">
+									<label class="option-label">
+										<span class="md-body-small">Unpaid amount:</span>
+									</label>
+									<div class="amount-input-wrapper small">
+										<span class="currency-symbol">$</span>
+										<input
+											type="number"
+											min="0"
+											max={priceAfterDiscount}
+											step="0.01"
+											bind:value={yetToPayAmount}
+											disabled={loading}
+											class="amount-input"
+										/>
+									</div>
+								</div>
+							{/if}
+							<div class="passcode-verified-badge">
+								<span class="material-symbols-rounded">verified</span>
+								<span class="md-label-medium">Passcode Verified</span>
+							</div>
+						</div>
+					{/if}
 				</div>
 
 				<!-- Notes Section -->
@@ -604,13 +865,249 @@
 		}
 	}
 
+	/* Pricing Summary */
+	.pricing-card {
+		background: var(--md-sys-color-surface-container-low);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		padding: var(--md-sys-spacing-md);
+	}
+
+	.pricing-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--md-sys-spacing-xs) 0;
+	}
+
+	.pricing-row.discount .md-title-medium {
+		color: var(--md-sys-color-success);
+	}
+
+	.pricing-row.unpaid .md-title-medium {
+		color: var(--md-sys-color-warning);
+	}
+
+	.pricing-row.total {
+		border-top: 1px solid var(--md-sys-color-outline-variant);
+		margin-top: var(--md-sys-spacing-sm);
+		padding-top: var(--md-sys-spacing-sm);
+	}
+
+	.pricing-row.total .md-headline-small {
+		color: var(--md-sys-color-primary);
+		font-weight: 600;
+	}
+
+	/* Split Payment */
+	.payment-inputs {
+		display: flex;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.payment-input-group {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.payment-input-label {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.payment-input-label .material-symbols-rounded {
+		font-size: 18px;
+	}
+
+	.amount-input-wrapper {
+		display: flex;
+		align-items: center;
+		background: var(--md-sys-color-surface);
+		border: 1px solid var(--md-sys-color-outline);
+		border-radius: var(--md-sys-shape-corner-small);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+	}
+
+	.amount-input-wrapper.small {
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+	}
+
+	.amount-input-wrapper:focus-within {
+		border-color: var(--md-sys-color-primary);
+		border-width: 2px;
+	}
+
+	.currency-symbol {
+		color: var(--md-sys-color-on-surface-variant);
+		font: var(--md-sys-typescale-body-large);
+		margin-right: var(--md-sys-spacing-xs);
+	}
+
+	.amount-input {
+		flex: 1;
+		border: none;
+		background: transparent;
+		font: var(--md-sys-typescale-title-medium);
+		color: var(--md-sys-color-on-surface);
+		width: 100%;
+		min-width: 60px;
+	}
+
+	.amount-input:focus {
+		outline: none;
+	}
+
+	.amount-input::-webkit-outer-spin-button,
+	.amount-input::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+
+	.payment-summary {
+		margin-top: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		background: var(--md-sys-color-surface-container-low);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	.payment-summary-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--md-sys-spacing-xs) 0;
+	}
+
+	.payment-summary-row.remaining .md-title-medium.error {
+		color: var(--md-sys-color-error);
+	}
+
+	.payment-summary-row.change .md-title-medium {
+		color: var(--md-sys-color-tertiary);
+	}
+
+	.payment-summary-row.complete {
+		color: var(--md-sys-color-success);
+		justify-content: center;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	/* Special Options (Discount/Yet-to-Pay) */
+	.special-options {
+		background: var(--md-sys-color-surface-container-low);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		padding: var(--md-sys-spacing-md);
+	}
+
+	.passcode-required-badge {
+		margin-left: auto;
+		padding: 2px 8px;
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		font: var(--md-sys-typescale-label-small);
+	}
+
+	.passcode-entry {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.passcode-entry p {
+		margin: 0;
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.passcode-input-row {
+		display: flex;
+		gap: var(--md-sys-spacing-sm);
+		align-items: center;
+	}
+
+	.passcode-input {
+		flex: 1;
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		border: 1px solid var(--md-sys-color-outline);
+		border-radius: var(--md-sys-shape-corner-small);
+		font: var(--md-sys-typescale-body-large);
+		background: var(--md-sys-color-surface);
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.passcode-input:focus {
+		outline: none;
+		border-color: var(--md-sys-color-primary);
+	}
+
+	.passcode-error {
+		color: var(--md-sys-color-error);
+		margin: 0;
+	}
+
+	.special-options-unlocked {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.option-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.option-row.indent {
+		padding-left: var(--md-sys-spacing-xl);
+	}
+
+	.option-label {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.option-label .material-symbols-rounded {
+		font-size: 18px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.yet-to-pay-checkbox {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		cursor: pointer;
+	}
+
+	.yet-to-pay-checkbox .material-symbols-rounded {
+		font-size: 18px;
+		color: var(--md-sys-color-warning);
+	}
+
+	.passcode-verified-badge {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		background: var(--md-sys-color-primary-container);
+		color: var(--md-sys-color-on-primary-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		margin-top: var(--md-sys-spacing-sm);
+		justify-content: center;
+	}
+
 	/* Responsive */
 	@media (max-width: 480px) {
 		.condition-options {
 			flex-direction: column;
 		}
 
-		.payment-options {
+		.payment-inputs {
 			flex-direction: column;
 		}
 	}

@@ -110,10 +110,73 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
-	const { id, action, returnData, currentShiftId } = await request.json();
+	const body = await request.json();
+	const { id, action, returnData, currentShiftId, customer, rentalType, notes } = body;
 
 	if (!id) {
 		return json({ error: 'Rental ID required' }, { status: 400 });
+	}
+
+	if (action === 'edit') {
+		const [rental] = await db.select().from(rentals).where(eq(rentals.id, id));
+		if (!rental) {
+			return json({ error: 'Rental not found' }, { status: 404 });
+		}
+
+		if (rental.status !== 'active') {
+			return json({ error: 'Cannot edit a closed rental' }, { status: 400 });
+		}
+
+		// Store original values if not already stored
+		const currentPricing = rental.pricing as {type: string, hourly?: number, fullDay?: number, originalValues?: object};
+		const originalValues = currentPricing.originalValues || {
+			customer: rental.customer,
+			pricing: { type: currentPricing.type },
+			editedAt: null
+		};
+
+		// Build update object
+		const updates: Record<string, unknown> = {};
+
+		if (customer !== undefined) {
+			updates.customer = customer;
+		}
+
+		if (rentalType !== undefined && ['hourly', 'fullDay'].includes(rentalType)) {
+			updates.pricing = {
+				...currentPricing,
+				type: rentalType,
+				originalValues: {
+					...originalValues,
+					editedAt: new Date().toISOString()
+				}
+			};
+		} else if (Object.keys(updates).length > 0) {
+			// If any update but no pricing change, still track original values
+			updates.pricing = {
+				...currentPricing,
+				originalValues: {
+					...originalValues,
+					editedAt: new Date().toISOString()
+				}
+			};
+		}
+
+		if (notes !== undefined) {
+			updates.returnNotes = notes;
+		}
+
+		if (Object.keys(updates).length === 0) {
+			return json({ error: 'No valid updates provided' }, { status: 400 });
+		}
+
+		const [updated] = await db
+			.update(rentals)
+			.set(updates)
+			.where(eq(rentals.id, id))
+			.returning();
+
+		return json(updated);
 	}
 
 	if (action === 'close') {
@@ -129,10 +192,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const rentalItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
 		const pricing = rental.pricing as {type: string, hourly?: number, fullDay?: number};
 
-		let finalPrice = 0;
-
+		// Calculate price based on rental type and elapsed time
+		let calculatedPrice = 0;
 		if (pricing.type === 'fullDay') {
-			finalPrice = pricing.fullDay || 0;
+			calculatedPrice = pricing.fullDay || 0;
 		} else if (pricing.type === 'hourly') {
 			const startTime = new Date(rental.startedAt).getTime();
 			const endTime = new Date().getTime();
@@ -140,11 +203,24 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			const diffMinutes = Math.floor(diffMs / (1000 * 60));
 			const hourlyRate = pricing.hourly || 0;
 			if (diffMinutes < 60) {
-				finalPrice = hourlyRate;
+				calculatedPrice = hourlyRate;
 			} else {
 				const hours = Math.ceil(diffMinutes / 60);
-				finalPrice = hourlyRate * hours;
+				calculatedPrice = hourlyRate * hours;
 			}
+		}
+
+		const discount = Math.max(0, Math.min(returnData?.discount || 0, calculatedPrice));
+		const serverFinalPrice = calculatedPrice - discount;
+		const finalPrice = Math.max(0, serverFinalPrice);
+
+		const cashAmount = Math.max(0, returnData?.cashAmount ?? 0);
+		const creditAmount = Math.max(0, returnData?.creditAmount ?? 0);
+		const yetToPay = Math.max(0, returnData?.yetToPay || 0);
+
+		const totalPayment = cashAmount + creditAmount + yetToPay;
+		if (Math.abs(totalPayment - finalPrice) > 0.01) {
+			return json({ error: 'Payment amounts do not match final price' }, { status: 400 });
 		}
 
 		for (const item of rentalItems) {
@@ -168,14 +244,36 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 		}
 
-		const paymentMethod = returnData?.paymentMethod || 'cash';
+		// Insert payment records for cash and credit separately if amounts > 0
+		if (cashAmount > 0) {
+			await db.insert(payments).values({
+				shiftId: currentShiftId,
+				rentalId: id,
+				amount: Math.round(cashAmount * 100), // Convert to cents
+				method: 'cash'
+			});
+		}
+		if (creditAmount > 0) {
+			await db.insert(payments).values({
+				shiftId: currentShiftId,
+				rentalId: id,
+				amount: Math.round(creditAmount * 100), // Convert to cents
+				method: 'credit'
+			});
+		}
 
-		await db.insert(payments).values({
-			shiftId: currentShiftId,
-			rentalId: id,
-			amount: finalPrice,
-			method: paymentMethod
-		});
+		// Build updated pricing object with all payment details
+		const updatedPricing = {
+			...pricing,
+			calculatedPrice,
+			discount,
+			finalPrice,
+			total: finalPrice,
+			cashPaid: cashAmount,
+			creditPaid: creditAmount,
+			yetToPay,
+			paymentMethod: cashAmount > 0 && creditAmount > 0 ? 'split' : (creditAmount > 0 ? 'credit' : 'cash')
+		};
 
 		const [updated] = await db
 			.update(rentals)
@@ -183,7 +281,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 				status: 'completed',
 				returnedAt: new Date(),
 				returnNotes: returnData ? JSON.stringify(returnData) : null,
-				pricing: { ...pricing, finalPrice, total: finalPrice, paymentMethod }
+				pricing: updatedPricing
 			})
 			.where(eq(rentals.id, id))
 			.returning();

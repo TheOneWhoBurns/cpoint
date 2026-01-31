@@ -177,6 +177,12 @@
 					Cancel
 				</md-text-button>
 			</a>
+			<a href="/admin" class="admin-link">
+				<md-text-button>
+					<span class="material-symbols-rounded" slot="icon">admin_panel_settings</span>
+					Admin Panel
+				</md-text-button>
+			</a>
 		</footer>
 	</div>
 </div>
@@ -438,11 +444,13 @@
 	.login-footer {
 		display: flex;
 		justify-content: center;
+		gap: var(--md-sys-spacing-md);
 		padding-top: var(--md-sys-spacing-md);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
 	}
 
-	.cancel-link {
+	.cancel-link,
+	.admin-link {
 		text-decoration: none;
 	}
 
