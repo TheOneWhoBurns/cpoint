@@ -378,7 +378,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-md);
-		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-xl);
 		min-height: 60px;
 		background: var(--md-sys-color-surface-container-low);
 		border: 2px solid var(--md-sys-color-outline-variant);
@@ -422,8 +422,8 @@
 	/* === Tracked Item Buttons === */
 	.tracked-items-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-		gap: var(--md-sys-spacing-xs);
+		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+		gap: var(--md-sys-spacing-sm);
 	}
 
 	.tracked-item-btn {
@@ -431,7 +431,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: var(--md-sys-spacing-sm);
-		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-xl);
 		min-height: 44px;
 		background: var(--md-sys-color-surface);
 		border: 1px solid var(--md-sys-color-outline-variant);
@@ -464,7 +464,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: var(--md-sys-spacing-sm);
-		padding: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-xl);
 		min-height: 72px;
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-medium);
@@ -515,7 +515,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-md);
-		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-xl);
 		min-height: 60px;
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-medium);

@@ -417,7 +417,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: var(--md-sys-spacing-sm);
-		padding: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-xl);
 		min-height: 72px;
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-medium);
@@ -521,7 +521,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-md);
-		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-xl);
 		min-height: 60px;
 		border: 2px solid var(--md-sys-color-outline-variant);
 		border-radius: var(--md-sys-shape-corner-medium);

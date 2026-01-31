@@ -395,6 +395,18 @@ md-filled-tonal-button {
 	display: inline-flex;
 	vertical-align: middle;
 	height: 40px;
+	/*
+	 * Fix icon-text vertical alignment inside MW buttons.
+	 * MW defaults icon-size to 18px but label line-height to 20px (1.25rem).
+	 * The Shadow DOM's ::slotted([slot='icon']) forces the icon to --_icon-size,
+	 * overriding any light-DOM styles. The 2px difference between icon (18px)
+	 * and label (20px) causes the icon to appear below text center.
+	 * Setting icon-size to 20px via the public custom properties aligns them.
+	 */
+	--md-filled-button-icon-size: 20px;
+	--md-outlined-button-icon-size: 20px;
+	--md-text-button-icon-size: 20px;
+	--md-filled-tonal-button-icon-size: 20px;
 }
 
 md-icon-button {
