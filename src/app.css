@@ -364,6 +364,10 @@ body {
 		'GRAD' 0,
 		'opsz' 24;
 	vertical-align: middle;
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .material-symbols-outlined.filled,
@@ -377,18 +381,39 @@ body {
 
 /*
  * Material Web component alignment fix
- * Custom elements render with inconsistent baseline/vertical positioning,
- * causing a "staircase" effect when placed inline or in flex rows.
- * Setting vertical-align: middle on all button/icon-button host elements
- * normalizes their alignment relative to siblings.
+ * Custom elements render as inline by default with inconsistent baseline
+ * positioning, causing a "staircase" effect in both inline and flex contexts.
+ * - display: inline-flex ensures they participate properly in flex layouts
+ * - vertical-align: middle fixes inline context alignment
+ * - Explicit height prevents inconsistent sizing between button variants
  * See: https://github.com/material-components/material-web/issues/626
  */
 md-filled-button,
 md-outlined-button,
 md-text-button,
-md-filled-tonal-button,
-md-icon-button {
+md-filled-tonal-button {
+	display: inline-flex;
 	vertical-align: middle;
+	height: 40px;
+	/*
+	 * Fix icon-text vertical alignment inside MW buttons.
+	 * MW defaults icon-size to 18px but label line-height to 20px (1.25rem).
+	 * The Shadow DOM's ::slotted([slot='icon']) forces the icon to --_icon-size,
+	 * overriding any light-DOM styles. The 2px difference between icon (18px)
+	 * and label (20px) causes the icon to appear below text center.
+	 * Setting icon-size to 20px via the public custom properties aligns them.
+	 */
+	--md-filled-button-icon-size: 20px;
+	--md-outlined-button-icon-size: 20px;
+	--md-text-button-icon-size: 20px;
+	--md-filled-tonal-button-icon-size: 20px;
+}
+
+md-icon-button {
+	display: inline-flex;
+	vertical-align: middle;
+	height: 40px;
+	width: 40px;
 }
 
 /* Icon sizes */
