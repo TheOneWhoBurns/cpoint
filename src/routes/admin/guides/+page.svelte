@@ -79,7 +79,7 @@
 		loading = false;
 	}
 
-	async function toggleActive(id: number, isActive: boolean) {
+	async function toggleActive(id: number, isActive: boolean | null) {
 		loading = true;
 		error = '';
 
@@ -124,7 +124,7 @@
 		pendingDeleteGuideId = null;
 	}
 
-	function formatLastRental(dateStr: string | null): string {
+	function formatLastRental(dateStr: string | Date | null): string {
 		if (!dateStr) return 'Never';
 		const date = new Date(dateStr);
 		return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

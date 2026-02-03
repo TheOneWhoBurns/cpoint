@@ -56,7 +56,7 @@
 		loading = false;
 	}
 
-	async function toggleActive(id: number, isActive: boolean) {
+	async function toggleActive(id: number, isActive: boolean | null) {
 		loading = true;
 		error = '';
 
