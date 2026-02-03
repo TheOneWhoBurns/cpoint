@@ -18,6 +18,9 @@
 		if (params.get('success') === 'connected') {
 			success = 'Google account connected successfully.';
 		}
+		if (params.get('error') === 'access_denied') {
+			error = 'Google authorization was denied. You must grant permissions to use Sheets export.';
+		}
 		if (params.get('error') === 'auth_failed') {
 			error = 'Failed to connect Google account. Please try again.';
 		}

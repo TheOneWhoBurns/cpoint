@@ -194,6 +194,13 @@ export const payments = pgTable('payments', {
 	index('idx_payments_rental').on(table.rentalId)
 ]);
 
+export const appSettings = pgTable('app_settings', {
+	id: serial('id').primaryKey(),
+	key: text('key').unique().notNull(),
+	value: jsonb('value'),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
+});
+
 export type Operator = typeof operators.$inferSelect;
 export type NewOperator = typeof operators.$inferInsert;
 export type Shift = typeof shifts.$inferSelect;
@@ -218,13 +225,6 @@ export type StoreProduct = typeof storeProducts.$inferSelect;
 export type NewStoreProduct = typeof storeProducts.$inferInsert;
 export type StoreSale = typeof storeSales.$inferSelect;
 export type NewStoreSale = typeof storeSales.$inferInsert;
-export const appSettings = pgTable('app_settings', {
-	id: serial('id').primaryKey(),
-	key: text('key').unique().notNull(),
-	value: jsonb('value'),
-	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
-});
-
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
 export type AppSetting = typeof appSettings.$inferSelect;
