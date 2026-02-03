@@ -225,6 +225,15 @@ export type StoreProduct = typeof storeProducts.$inferSelect;
 export type NewStoreProduct = typeof storeProducts.$inferInsert;
 export type StoreSale = typeof storeSales.$inferSelect;
 export type NewStoreSale = typeof storeSales.$inferInsert;
+export const adminSessions = pgTable('admin_sessions', {
+	id: serial('id').primaryKey(),
+	token: text('token').unique().notNull(),
+	operatorId: integer('operator_id').references(() => operators.id).notNull(),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
+
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
 export type AppSetting = typeof appSettings.$inferSelect;
@@ -235,3 +244,5 @@ export type TourBooking = typeof tourBookings.$inferSelect;
 export type NewTourBooking = typeof tourBookings.$inferInsert;
 export type ClosingChecklistItem = typeof closingChecklistItems.$inferSelect;
 export type NewClosingChecklistItem = typeof closingChecklistItems.$inferInsert;
+export type AdminSession = typeof adminSessions.$inferSelect;
+export type NewAdminSession = typeof adminSessions.$inferInsert;
