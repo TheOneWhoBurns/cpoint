@@ -108,16 +108,17 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json({ error: 'Reservation is not active' }, { status: 400 });
 		}
 
-		// Passcode required for cancel (delete equivalent)
-		if (passcode) {
-			const [operator] = await db
-				.select()
-				.from(operators)
-				.where(eq(operators.passcode, passcode));
+		if (!passcode) {
+			return json({ error: 'Passcode required' }, { status: 400 });
+		}
 
-			if (!operator) {
-				return json({ error: 'Invalid passcode' }, { status: 403 });
-			}
+		const [operator] = await db
+			.select()
+			.from(operators)
+			.where(eq(operators.passcode, passcode));
+
+		if (!operator) {
+			return json({ error: 'Invalid passcode' }, { status: 403 });
 		}
 
 		const [updated] = await db
