@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { rentals, storeSales } from '$lib/server/db/schema';
+import { rentals, storeSales, tourBookings } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -46,13 +46,24 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	const storeSalesTotal = Math.round(shiftSalesData.reduce((sum, s) => sum + s.total, 0) / 100);
 
+	const shiftTourBookings = await db
+		.select()
+		.from(tourBookings)
+		.where(eq(tourBookings.shiftId, shiftId));
+
+	const tourRevenue = shiftTourBookings.reduce((sum, b) => sum + b.totalPrice, 0) / 100;
+	const tourCost = shiftTourBookings.reduce((sum, b) => sum + (b.cost ?? 0), 0) / 100;
+
 	return json({
 		rentalsCount: shiftRentals.length,
 		rentalsCash,
 		rentalsCredit,
 		storeSalesCount: shiftSalesData.length,
 		storeSalesTotal,
-		totalCash: rentalsCash + storeSalesTotal,
+		tourBookingsCount: shiftTourBookings.length,
+		tourRevenue,
+		tourCost,
+		totalCash: rentalsCash + storeSalesTotal + tourRevenue,
 		totalCredit: rentalsCredit
 	});
 };
