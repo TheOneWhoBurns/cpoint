@@ -31,6 +31,7 @@
 		"@sveltejs/adapter-node": "^5.4.0",
 		"dotenv": "^17.2.3",
 		"drizzle-orm": "^0.45.1",
+		"flatpickr": "^4.6.13",
 		"googleapis": "^171.1.0",
 		"material-symbols": "^0.27.0",
 		"postgres": "^3.4.7",

@@ -27,6 +27,11 @@
 		if (params.get('error') === 'not_configured') {
 			error = 'Google OAuth credentials are not configured on the server.';
 		}
+		// Clear URL params so messages don't persist on refresh
+		if (params.has('success') || params.has('error')) {
+			const cleanUrl = $page.url.pathname;
+			history.replaceState(history.state, '', cleanUrl);
+		}
 	});
 
 	async function handleDisconnect() {

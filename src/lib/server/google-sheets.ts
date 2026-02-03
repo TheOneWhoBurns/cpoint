@@ -17,12 +17,13 @@ export function getOAuth2Client() {
 	);
 }
 
-export function getAuthUrl(): string {
+export function getAuthUrl(state: string): string {
 	const client = getOAuth2Client();
 	return client.generateAuthUrl({
 		access_type: 'offline',
 		scope: SCOPES,
-		prompt: 'consent'
+		prompt: 'consent',
+		state
 	});
 }
 
@@ -45,7 +46,13 @@ export async function handleCallback(code: string) {
 	return tokens;
 }
 
+let cachedClient: InstanceType<typeof google.auth.OAuth2> | null = null;
+
 async function getAuthenticatedClient() {
+	if (cachedClient) {
+		return cachedClient;
+	}
+
 	const [setting] = await db
 		.select()
 		.from(appSettings)
@@ -67,6 +74,7 @@ async function getAuthenticatedClient() {
 			.where(eq(appSettings.key, 'google_tokens'));
 	});
 
+	cachedClient = client;
 	return client;
 }
 
@@ -82,6 +90,7 @@ export async function isGoogleConnected(): Promise<boolean> {
 }
 
 export async function disconnectGoogle() {
+	cachedClient = null;
 	await db
 		.delete(appSettings)
 		.where(eq(appSettings.key, 'google_tokens'));
@@ -106,7 +115,10 @@ export async function createSpreadsheet(title: string, sheets: SheetData[]): Pro
 		}
 	});
 
-	const spreadsheetId = spreadsheet.data.spreadsheetId!;
+	const spreadsheetId = spreadsheet.data.spreadsheetId;
+	if (!spreadsheetId) {
+		throw new Error('Google Sheets API did not return a spreadsheet ID');
+	}
 
 	const data = sheets.map((s) => ({
 		range: `'${s.name}'!A1`,
