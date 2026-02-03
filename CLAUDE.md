@@ -3,7 +3,7 @@
 A full-stack SvelteKit application for managing equipment rentals and point-of-sale operations with real-time inventory tracking, guide management, and shift-based operations.
 
 **Stack**: SvelteKit, TypeScript, PostgreSQL, Drizzle ORM, Material Web 3
-**Deployment**: EC2 with systemd service, GitHub Actions deploys on push to `rental-system` (blue-green Docker/Nginx infra exists in repo but is not yet active)
+**Deployment**: AWS EC2 instance with systemd service, GitHub Actions deploys on push to `rental-system` (blue-green Docker/Nginx infra exists in repo but is not yet active)
 **Key Features**: Equipment rentals (tracked + generic items), guide management with cooldown, store sales, shift-based operations, Excel reporting
 
 ## Quick Links
@@ -58,10 +58,20 @@ npm run db:push    # Apply schema migrations
 npm run db:studio  # Open database GUI
 ```
 
-## Production
+## Production (AWS EC2)
 
-Deployed to EC2 via GitHub Actions on push to `rental-system`:
+The app runs on an **AWS EC2 instance** — not a managed platform. There is no secrets manager or environment variable injection from CI. Deployed via GitHub Actions on push to `rental-system`:
 - Single Node.js process managed by systemd (`rental-app` service)
 - App runs on port 3000, health check at `/health`
 - Deploy workflow: `git pull` → `npm ci` → `npm run build` → `npm run db:push` → `systemctl restart`
 - Blue-green Docker/Nginx infrastructure exists in repo for future use but is not yet active
+
+### Environment Variables / Secrets
+
+Environment variables (e.g. `DATABASE_URL`) live in `.env.production` on the EC2 server at `/opt/rental-system/.env.production`. **When a new env variable or secret is added to the codebase, it must be manually exported on the EC2 server** — there is no automated secret syncing. To add a new secret:
+
+1. SSH into the EC2 instance
+2. Edit `/opt/rental-system/.env.production` to add the variable
+3. Restart the service: `sudo systemctl restart rental-app`
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full server setup details.

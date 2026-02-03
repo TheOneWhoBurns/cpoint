@@ -32,7 +32,8 @@
 		{ href: '/admin/guides', label: 'Guides', icon: 'hiking' },
 		{ href: '/admin/tour-agency', label: 'Tour Agency', icon: 'tour' },
 		{ href: '/admin/inventory', label: 'Inventory', icon: 'warehouse' },
-		{ href: '/admin/settings', label: 'Settings', icon: 'settings' }
+		{ href: '/admin/settings', label: 'Settings', icon: 'settings' },
+		{ href: '/admin/closing-checklist', label: 'Closing Checklist', icon: 'checklist' }
 	];
 
 	const isLoginPage = $derived($page.url.pathname === '/admin/login');
@@ -114,6 +115,8 @@
 						Inventory
 					{:else if $page.url.pathname.includes('/settings')}
 						Settings
+					{:else if $page.url.pathname.includes('/closing-checklist')}
+						Closing Checklist
 					{/if}
 				</h1>
 			</div>

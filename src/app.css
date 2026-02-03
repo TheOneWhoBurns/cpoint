@@ -407,6 +407,7 @@ md-filled-tonal-button {
 	--md-outlined-button-icon-size: 20px;
 	--md-text-button-icon-size: 20px;
 	--md-filled-tonal-button-icon-size: 20px;
+	padding-inline: 24px;
 }
 
 md-icon-button {

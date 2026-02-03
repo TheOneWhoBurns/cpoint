@@ -146,6 +146,7 @@
 					value={guideName}
 					oninput={(e: Event) => guideName = (e.target as HTMLInputElement).value}
 					disabled={loading}
+					supporting-text="Name of the guide"
 				>
 					<span class="material-symbols-rounded" slot="leading-icon">hiking</span>
 				</md-outlined-text-field>

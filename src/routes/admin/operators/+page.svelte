@@ -101,6 +101,7 @@
 					placeholder="Enter operator name"
 					value={name}
 					oninput={(e: Event) => name = (e.target as HTMLInputElement).value}
+					supporting-text="Full name of the operator"
 				>
 					<span class="material-symbols-rounded" slot="leading-icon">badge</span>
 				</md-outlined-text-field>

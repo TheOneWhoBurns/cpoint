@@ -1,11 +1,20 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { rentals, trackedItems, productTypes, rentalProducts, guides, payments } from '$lib/server/db/schema';
+import { rentals, trackedItems, productTypes, rentalProducts, guides, payments, reservations, operators } from '$lib/server/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
+interface ReservationItem {
+	type: string;
+	itemId?: number;
+	categoryId?: number;
+	code?: string;
+	name: string;
+	quantity?: number;
+}
+
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const { productId, customer, items, rentalType, quantity = 1, shiftId, guideId = null } = await request.json();
+	const { productId, customer, items, rentalType, quantity = 1, shiftId, guideId = null, overrideReservationIds, operatorPasscode, fromReservationId } = await request.json();
 
 	if (!productId) {
 		return json({ error: 'Product ID required' }, { status: 400 });
@@ -70,6 +79,71 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 	}
 
+	// Check for reservation conflicts (unless fulfilling from a reservation or overriding)
+	if (!fromReservationId) {
+		const rentalTrackedIds = items
+			.filter((i: ReservationItem) => i.type === 'tracked' && i.itemId)
+			.map((i: ReservationItem) => i.itemId!);
+
+		if (rentalTrackedIds.length > 0) {
+			const activeReservations = await db
+				.select()
+				.from(reservations)
+				.where(eq(reservations.status, 'active'));
+
+			const now = new Date();
+			const conflicts = [];
+
+			for (const res of activeReservations) {
+				const resItems = res.items as ReservationItem[];
+				const resFrom = new Date(res.reservedFrom);
+				const resUntil = new Date(res.reservedUntil);
+
+				// A rental starting now conflicts if the reservation window overlaps with now
+				if (now < resUntil && resFrom <= resUntil) {
+					const resTrackedIds = resItems
+						.filter(i => i.type === 'tracked' && i.itemId)
+						.map(i => i.itemId!);
+
+					const overlappingIds = rentalTrackedIds.filter((id: number) => resTrackedIds.includes(id));
+					if (overlappingIds.length > 0) {
+						// Check if this reservation is being overridden
+						if (!overrideReservationIds || !overrideReservationIds.includes(res.id)) {
+							conflicts.push({
+								id: res.id,
+								customer: res.customer,
+								reason: res.reason,
+								reservedFrom: res.reservedFrom,
+								reservedUntil: res.reservedUntil,
+								items: resItems.filter(i => i.itemId && overlappingIds.includes(i.itemId))
+							});
+						}
+					}
+				}
+			}
+
+			if (conflicts.length > 0) {
+				// If override requested, verify passcode
+				if (overrideReservationIds && operatorPasscode) {
+					const [operator] = await db
+						.select()
+						.from(operators)
+						.where(eq(operators.passcode, operatorPasscode));
+
+					if (!operator) {
+						return json({ error: 'Invalid passcode for reservation override' }, { status: 403 });
+					}
+					// Passcode valid, continue with rental creation
+				} else {
+					return json({
+						error: 'reservation_conflict',
+						conflicts
+					}, { status: 409 });
+				}
+			}
+		}
+	}
+
 	for (const item of items) {
 		if (item.type === 'tracked') {
 			await db
@@ -106,12 +180,23 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		})
 		.returning();
 
+	// If fulfilling from a reservation, mark it as fulfilled
+	if (fromReservationId) {
+		await db
+			.update(reservations)
+			.set({
+				status: 'fulfilled',
+				fulfilledByRentalId: created.id
+			})
+			.where(eq(reservations.id, fromReservationId));
+	}
+
 	return json(created, { status: 201 });
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
 	const body = await request.json();
-	const { id, action, returnData, currentShiftId, customer, rentalType, notes } = body;
+	const { id, action, returnData, currentShiftId, customer, rentalType, notes, items: newItems, guideId: newGuideId } = body;
 
 	if (!id) {
 		return json({ error: 'Rental ID required' }, { status: 400 });
@@ -131,6 +216,8 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const currentPricing = rental.pricing as {type: string, hourly?: number, fullDay?: number, originalValues?: object};
 		const originalValues = currentPricing.originalValues || {
 			customer: rental.customer,
+			items: rental.items,
+			guideId: rental.guideId,
 			pricing: { type: currentPricing.type },
 			editedAt: null
 		};
@@ -140,6 +227,95 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		if (customer !== undefined) {
 			updates.customer = customer;
+		}
+
+		// Handle item changes - release old items, claim new items
+		if (newItems !== undefined && Array.isArray(newItems)) {
+			const oldItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
+
+			// Validate new items availability (excluding items already in this rental)
+			const oldTrackedIds = new Set(oldItems.filter(i => i.type === 'tracked' && i.itemId).map(i => i.itemId));
+			const newTrackedIds = new Set(newItems.filter((i: any) => i.type === 'tracked' && i.itemId).map((i: any) => i.itemId));
+
+			for (const item of newItems) {
+				if (item.type === 'tracked' && !oldTrackedIds.has(item.itemId)) {
+					const [tracked] = await db.select().from(trackedItems).where(eq(trackedItems.id, item.itemId));
+					if (!tracked || tracked.status !== 'available') {
+						return json({ error: `Item ${item.code || item.itemId} is no longer available` }, { status: 400 });
+					}
+				} else if (item.type === 'generic') {
+					const oldGeneric = oldItems.find(i => i.type === 'generic' && i.categoryId === item.categoryId);
+					const oldQty = oldGeneric?.quantity || 0;
+					const newQty = item.quantity || 1;
+					const additionalNeeded = newQty - oldQty;
+					if (additionalNeeded > 0) {
+						const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
+						if (!cat) {
+							return json({ error: 'Category not found' }, { status: 400 });
+						}
+						if ((cat.availableQuantity ?? 0) < additionalNeeded) {
+							return json({ error: `Not enough ${cat.name} available (need ${additionalNeeded} more, have ${cat.availableQuantity})` }, { status: 400 });
+						}
+					}
+				}
+			}
+
+			// Release tracked items that were removed
+			for (const item of oldItems) {
+				if (item.type === 'tracked' && item.itemId && !newTrackedIds.has(item.itemId)) {
+					await db.update(trackedItems).set({ status: 'available' }).where(eq(trackedItems.id, item.itemId));
+				}
+			}
+
+			// Claim tracked items that were added
+			for (const item of newItems) {
+				if (item.type === 'tracked' && item.itemId && !oldTrackedIds.has(item.itemId)) {
+					await db.update(trackedItems).set({ status: 'rented' }).where(eq(trackedItems.id, item.itemId));
+				}
+			}
+
+			// Adjust generic item quantities
+			const oldGenericMap = new Map<number, number>();
+			for (const item of oldItems) {
+				if (item.type === 'generic' && item.categoryId) {
+					oldGenericMap.set(item.categoryId, (oldGenericMap.get(item.categoryId) || 0) + (item.quantity || 1));
+				}
+			}
+			const newGenericMap = new Map<number, number>();
+			for (const item of newItems) {
+				if (item.type === 'generic' && item.categoryId) {
+					newGenericMap.set(item.categoryId, (newGenericMap.get(item.categoryId) || 0) + (item.quantity || 1));
+				}
+			}
+
+			// Process all categories that changed
+			const allCategoryIds = new Set([...oldGenericMap.keys(), ...newGenericMap.keys()]);
+			for (const catId of allCategoryIds) {
+				const oldQty = oldGenericMap.get(catId) || 0;
+				const newQty = newGenericMap.get(catId) || 0;
+				const diff = newQty - oldQty;
+				if (diff !== 0) {
+					const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, catId));
+					if (cat) {
+						await db.update(productTypes)
+							.set({ availableQuantity: (cat.availableQuantity ?? 0) - diff })
+							.where(eq(productTypes.id, catId));
+					}
+				}
+			}
+
+			updates.items = newItems;
+		}
+
+		// Handle guide change
+		if (newGuideId !== undefined) {
+			if (newGuideId !== null) {
+				const [guide] = await db.select().from(guides).where(eq(guides.id, newGuideId));
+				if (!guide) {
+					return json({ error: 'Guide not found' }, { status: 404 });
+				}
+			}
+			updates.guideId = newGuideId || null;
 		}
 
 		if (rentalType !== undefined && ['hourly', 'fullDay'].includes(rentalType)) {
