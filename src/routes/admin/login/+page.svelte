@@ -7,6 +7,8 @@
 
 	let { data } = $props();
 
+	const adminBase = $derived(data.adminBase ?? '/admin');
+
 	let selectedAdmin: typeof data.adminOperators[0] | null = $state(null);
 	let passcode = $state('');
 	let error = $state('');
@@ -85,7 +87,7 @@
 				return;
 			}
 
-			goto('/admin');
+			goto(adminBase || '/');
 		} catch {
 			error = 'Connection error';
 			loading = false;
@@ -253,14 +255,16 @@
 			{/if}
 		{/if}
 
-		<footer class="login-footer">
-			<a href="/login">
-				<md-text-button>
-					<span class="material-symbols-rounded" slot="icon">arrow_back</span>
-					Back to Operator Login
-				</md-text-button>
-			</a>
-		</footer>
+		{#if adminBase}
+			<footer class="login-footer">
+				<a href="/login">
+					<md-text-button>
+						<span class="material-symbols-rounded" slot="icon">arrow_back</span>
+						Back to Operator Login
+					</md-text-button>
+				</a>
+			</footer>
+		{/if}
 	</div>
 </div>
 
