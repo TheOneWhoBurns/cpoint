@@ -119,6 +119,7 @@ export const storeProducts = pgTable('store_products', {
 	name: text('name').notNull(),
 	category: text('category'),
 	price: integer('price').notNull(),
+	cost: integer('cost'),
 	quantity: integer('quantity').default(0),
 	isActive: boolean('is_active').default(true),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()

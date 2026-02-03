@@ -10,7 +10,7 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
-	const { name, category, price, quantity } = await request.json();
+	const { name, category, price, cost, quantity } = await request.json();
 
 	if (!name) {
 		return json({ error: 'Product name required' }, { status: 400 });
@@ -20,12 +20,17 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Valid price required' }, { status: 400 });
 	}
 
+	if (cost !== undefined && cost !== null && cost < 0) {
+		return json({ error: 'Valid cost required' }, { status: 400 });
+	}
+
 	const [created] = await db
 		.insert(storeProducts)
 		.values({
 			name,
 			category,
 			price: Math.round(price * 100),
+			cost: cost != null ? Math.round(cost * 100) : null,
 			quantity: quantity || 0
 		})
 		.returning();
