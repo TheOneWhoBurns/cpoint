@@ -47,7 +47,6 @@
 	let showTourBookingModal = $state(false);
 	let selectedTourProductId = $state<number | null>(null);
 	let tourPax = $state(1);
-	let tourBookedAt = $state('');
 	let tourActivityDate = $state('');
 	let tourSelectedGuideId = $state<number | null>(null);
 	let tourError = $state('');
@@ -58,24 +57,12 @@
 	let confirmDeleteTourBooking = $state(false);
 	let pendingDeleteTourBookingId = $state<number | null>(null);
 
-	let bookedAtInput = $state<HTMLInputElement | null>(null);
 	let activityDateInput = $state<HTMLInputElement | null>(null);
-	let bookedAtPicker: flatpickr.Instance | null = null;
 	let activityDatePicker: flatpickr.Instance | null = null;
 
 	const selectedTourProduct = $derived(selectedTourProductId ? data.tourProducts.find(p => p.id === selectedTourProductId) : null);
 
 	function initFlatpickr() {
-		if (bookedAtInput && !bookedAtPicker) {
-			bookedAtPicker = flatpickr(bookedAtInput, {
-				dateFormat: 'Y-m-d',
-				defaultDate: new Date(),
-				onChange: (dates) => {
-					if (dates[0]) tourBookedAt = dates[0].toISOString();
-				}
-			});
-			tourBookedAt = new Date().toISOString();
-		}
 		if (activityDateInput && !activityDatePicker) {
 			activityDatePicker = flatpickr(activityDateInput, {
 				dateFormat: 'Y-m-d',
@@ -87,9 +74,7 @@
 	}
 
 	function destroyFlatpickr() {
-		bookedAtPicker?.destroy();
 		activityDatePicker?.destroy();
-		bookedAtPicker = null;
 		activityDatePicker = null;
 	}
 
@@ -98,7 +83,6 @@
 		tourError = '';
 		selectedTourProductId = null;
 		tourPax = 1;
-		tourBookedAt = new Date().toISOString();
 		tourActivityDate = '';
 		tourSelectedGuideId = null;
 		// defer flatpickr init to next tick so inputs exist
@@ -119,10 +103,6 @@
 			tourError = 'At least 1 pax required';
 			return;
 		}
-		if (!tourBookedAt) {
-			tourError = 'Booked at date required';
-			return;
-		}
 		if (!tourActivityDate) {
 			tourError = 'Activity date required';
 			return;
@@ -139,7 +119,7 @@
 				tourProductId: selectedTourProductId,
 				guideId: tourSelectedGuideId || null,
 				pax: tourPax,
-				bookedAt: tourBookedAt,
+				bookedAt: new Date().toISOString(),
 				activityDate: tourActivityDate
 			})
 		});
@@ -1235,21 +1215,6 @@
 							Total: ${((selectedTourProduct.price / 100) * tourPax).toFixed(2)} ({tourPax} x ${(selectedTourProduct.price / 100).toFixed(2)})
 						</p>
 					{/if}
-				</div>
-
-				<div class="form-section">
-					<label class="form-label">
-						<span class="material-symbols-rounded">event</span>
-						<span class="md-title-small">Booked At</span>
-					</label>
-					<input
-						type="text"
-						class="flatpickr-input form-date-input"
-						placeholder="Select booked date..."
-						bind:this={bookedAtInput}
-						disabled={loading}
-						readonly
-					/>
 				</div>
 
 				<div class="form-section">
