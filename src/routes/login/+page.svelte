@@ -1,11 +1,24 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { shiftStore } from '$lib/stores/shift';
+	import { themeStore, type Theme } from '$lib/stores/theme';
 	import '@material/web/button/filled-button.js';
 	import '@material/web/button/outlined-button.js';
 	import '@material/web/button/text-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
+	import '@material/web/iconbutton/icon-button.js';
 	import '@material/web/progress/circular-progress.js';
+
+	let currentTheme = $state<Theme>('system');
+	$effect(() => {
+		return themeStore.subscribe((v) => (currentTheme = v));
+	});
+	function resolvedIsDark(theme: Theme): boolean {
+		if (theme === 'system') {
+			return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+		}
+		return theme === 'dark';
+	}
 
 	let { data } = $props();
 
@@ -75,6 +88,11 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="login-page">
+	<div class="theme-toggle-corner">
+		<md-icon-button onclick={() => themeStore.toggle()} aria-label="Toggle dark mode">
+			<span class="material-symbols-rounded">{resolvedIsDark(currentTheme) ? 'light_mode' : 'dark_mode'}</span>
+		</md-icon-button>
+	</div>
 	<div class="login-card md-animate-scale-in">
 		<!-- Header -->
 		<header class="login-header">
@@ -194,11 +212,18 @@
 		align-items: center;
 		min-height: 100vh;
 		padding: var(--md-sys-spacing-lg);
+		position: relative;
 		background: linear-gradient(
 			135deg,
 			var(--md-sys-color-surface-container-low) 0%,
 			var(--md-sys-color-surface-container) 100%
 		);
+	}
+
+	.theme-toggle-corner {
+		position: absolute;
+		top: var(--md-sys-spacing-md);
+		right: var(--md-sys-spacing-md);
 	}
 
 	.login-card {

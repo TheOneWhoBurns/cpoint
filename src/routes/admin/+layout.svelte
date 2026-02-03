@@ -3,8 +3,21 @@
 	import '@material/web/button/text-button.js';
 	import '@material/web/button/filled-tonal-button.js';
 	import '@material/web/iconbutton/icon-button.js';
+	import { themeStore, type Theme } from '$lib/stores/theme';
 
 	let { children } = $props();
+
+	let currentTheme = $state<Theme>('system');
+	$effect(() => {
+		return themeStore.subscribe((v) => (currentTheme = v));
+	});
+
+	function resolvedIsDark(theme: Theme): boolean {
+		if (theme === 'system') {
+			return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+		}
+		return theme === 'dark';
+	}
 
 	const navItems = [
 		{ href: '/admin', label: 'Dashboard', icon: 'dashboard' },
@@ -63,7 +76,7 @@
 		<!-- Top App Bar -->
 		<header class="admin-topbar">
 			<div class="topbar-title">
-				<h1 class="md-title-large">
+				<h1 class="md-title-large" style="flex: 1;">
 					{#if $page.url.pathname === '/admin'}
 						Dashboard
 					{:else if $page.url.pathname.includes('/operators')}
@@ -84,6 +97,9 @@
 						Closing Checklist
 					{/if}
 				</h1>
+				<md-icon-button onclick={() => themeStore.toggle()} aria-label="Toggle dark mode">
+					<span class="material-symbols-rounded">{resolvedIsDark(currentTheme) ? 'light_mode' : 'dark_mode'}</span>
+				</md-icon-button>
 			</div>
 		</header>
 
@@ -224,6 +240,12 @@
 		background: var(--md-sys-color-surface);
 		border-bottom: 1px solid var(--md-sys-color-outline-variant);
 		min-height: 64px;
+	}
+
+	.topbar-title {
+		display: flex;
+		align-items: center;
+		flex: 1;
 	}
 
 	.topbar-title h1 {

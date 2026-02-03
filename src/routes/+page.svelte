@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { shiftStore } from '$lib/stores/shift';
+	import { themeStore, type Theme } from '$lib/stores/theme';
 	import { invalidateAll } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import '@material/web/button/filled-button.js';
@@ -83,6 +84,18 @@
 	let reservationUntilInput = $state<HTMLInputElement | null>(null);
 	let reservationFromPicker: flatpickr.Instance | null = null;
 	let reservationUntilPicker: flatpickr.Instance | null = null;
+
+	// Theme
+	let currentTheme = $state<Theme>('system');
+	$effect(() => {
+		return themeStore.subscribe((v) => (currentTheme = v));
+	});
+	function resolvedIsDark(theme: Theme): boolean {
+		if (theme === 'system') {
+			return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+		}
+		return theme === 'dark';
+	}
 
 	// Conflict override state
 	let showConflictModal = $state(false);
@@ -844,6 +857,9 @@
 						<span class="md-body-small">{error}</span>
 					</div>
 				{/if}
+				<md-icon-button onclick={() => themeStore.toggle()} aria-label="Toggle dark mode">
+					<span class="material-symbols-rounded">{resolvedIsDark(currentTheme) ? 'light_mode' : 'dark_mode'}</span>
+				</md-icon-button>
 				<div class="operator-badge">
 					<span class="material-symbols-rounded">person</span>
 					<span class="md-label-large">{$shiftStore.operator?.name}</span>
