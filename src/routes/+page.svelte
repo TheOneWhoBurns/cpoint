@@ -43,12 +43,8 @@
 		totalRevenue: number
 	} | null>(null);
 	let cashCounted = $state('');
-	let closeChecklist = $state<Record<string, boolean>>({
-		equipmentReturned: false,
-		cashCounted: false,
-		areaClean: false,
-		equipmentSecured: false
-	});
+	let checklistItems = $state<Array<{ id: number; label: string }>>([]);
+	let closeChecklist = $state<Record<number, boolean>>({});
 	let showStoreSaleModal = $state(false);
 	let selectedStoreProductId = $state<number | null>(null);
 	let saleQuantity = $state(1);
@@ -217,12 +213,22 @@
 			if (res.ok) {
 				shiftSummary = await res.json();
 				cashCounted = '';
-				closeChecklist = {
-					equipmentReturned: false,
-					cashCounted: false,
-					areaClean: false,
-					equipmentSecured: false
-				};
+				// Fetch configurable checklist items
+				try {
+					const clRes = await fetch('/api/closing-checklist');
+					if (clRes.ok) {
+						const allItems = await clRes.json();
+						checklistItems = allItems.filter((i: any) => i.isActive);
+					} else {
+						checklistItems = [];
+					}
+				} catch {
+					checklistItems = [];
+				}
+				closeChecklist = {};
+				for (const item of checklistItems) {
+					closeChecklist[item.id] = false;
+				}
 				showShiftSummary = true;
 			} else {
 				const d = await res.json();
@@ -252,7 +258,7 @@
 	});
 
 	const allChecklistComplete = $derived(
-		Object.values(closeChecklist).every(v => v)
+		checklistItems.length === 0 || Object.values(closeChecklist).every(v => v)
 	);
 
 	async function executeEndShift() {
@@ -1182,48 +1188,25 @@
 				</div>
 
 				<!-- Close Checklist -->
-				<div class="summary-section">
-					<div class="summary-header">
-						<span class="material-symbols-rounded">checklist</span>
-						<span class="md-title-medium">Closing Checklist</span>
+				{#if checklistItems.length > 0}
+					<div class="summary-section">
+						<div class="summary-header">
+							<span class="material-symbols-rounded">checklist</span>
+							<span class="md-title-medium">Closing Checklist</span>
+						</div>
+						{#each checklistItems as item (item.id)}
+							<label class="checklist-item">
+								<md-checkbox
+									checked={closeChecklist[item.id] ?? false}
+									onchange={(e: Event) => closeChecklist[item.id] = (e.target as HTMLInputElement).checked}
+								></md-checkbox>
+								<div class="checklist-label">
+									<span class="md-body-medium">{item.label}</span>
+								</div>
+							</label>
+						{/each}
 					</div>
-					<label class="checklist-item">
-						<md-checkbox
-							checked={closeChecklist.equipmentReturned}
-							onchange={(e: Event) => closeChecklist.equipmentReturned = (e.target as HTMLInputElement).checked}
-						></md-checkbox>
-						<div class="checklist-label">
-							<span class="md-body-medium">All equipment returned and accounted for</span>
-						</div>
-					</label>
-					<label class="checklist-item">
-						<md-checkbox
-							checked={closeChecklist.cashCounted}
-							onchange={(e: Event) => closeChecklist.cashCounted = (e.target as HTMLInputElement).checked}
-						></md-checkbox>
-						<div class="checklist-label">
-							<span class="md-body-medium">Cash drawer counted and verified</span>
-						</div>
-					</label>
-					<label class="checklist-item">
-						<md-checkbox
-							checked={closeChecklist.areaClean}
-							onchange={(e: Event) => closeChecklist.areaClean = (e.target as HTMLInputElement).checked}
-						></md-checkbox>
-						<div class="checklist-label">
-							<span class="md-body-medium">Work area cleaned and organized</span>
-						</div>
-					</label>
-					<label class="checklist-item">
-						<md-checkbox
-							checked={closeChecklist.equipmentSecured}
-							onchange={(e: Event) => closeChecklist.equipmentSecured = (e.target as HTMLInputElement).checked}
-						></md-checkbox>
-						<div class="checklist-label">
-							<span class="md-body-medium">Equipment stored and secured</span>
-						</div>
-					</label>
-				</div>
+				{/if}
 			</div>
 
 			<div class="modal-footer">
