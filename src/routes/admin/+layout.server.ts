@@ -1,33 +1,37 @@
 import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { operators } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { operators, adminSessions } from '$lib/server/db/schema';
+import { eq, and, gt } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ cookies, url }) => {
-	// Don't guard the login page itself
 	if (url.pathname === '/admin/login') {
 		return {};
 	}
 
-	const adminIdStr = cookies.get('adminId');
-	if (!adminIdStr) {
+	const token = cookies.get('adminSession');
+	if (!token) {
 		redirect(302, '/admin/login');
 	}
 
-	const adminId = parseInt(adminIdStr);
-	if (isNaN(adminId)) {
-		cookies.delete('adminId', { path: '/' });
+	const [session] = await db
+		.select({ operatorId: adminSessions.operatorId })
+		.from(adminSessions)
+		.where(and(eq(adminSessions.token, token), gt(adminSessions.expiresAt, new Date())));
+
+	if (!session) {
+		cookies.delete('adminSession', { path: '/' });
 		redirect(302, '/admin/login');
 	}
 
 	const [admin] = await db
 		.select({ id: operators.id, name: operators.name })
 		.from(operators)
-		.where(and(eq(operators.id, adminId), eq(operators.isActive, true), eq(operators.isAdmin, true)));
+		.where(and(eq(operators.id, session.operatorId), eq(operators.isActive, true), eq(operators.isAdmin, true)));
 
 	if (!admin) {
-		cookies.delete('adminId', { path: '/' });
+		await db.delete(adminSessions).where(eq(adminSessions.token, token));
+		cookies.delete('adminSession', { path: '/' });
 		redirect(302, '/admin/login');
 	}
 

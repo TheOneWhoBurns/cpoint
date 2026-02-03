@@ -1,10 +1,26 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { operators } from '$lib/server/db/schema';
+import { operators, adminSessions } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { verifyPasscode, generateSessionToken, checkRateLimit, clearRateLimit } from '$lib/server/auth';
+import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+const SESSION_MAX_AGE = 60 * 60 * 24; // 24 hours in seconds
+
+export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
+	const clientIp = getClientAddress();
+	const rateCheck = checkRateLimit(`admin-login:${clientIp}`);
+	if (!rateCheck.allowed) {
+		return json(
+			{ error: 'Too many login attempts. Try again later.' },
+			{
+				status: 429,
+				headers: { 'Retry-After': String(rateCheck.retryAfterSeconds) }
+			}
+		);
+	}
+
 	let body;
 	try {
 		body = await request.json();
@@ -27,15 +43,28 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
-	if (operator.passcode !== passcode) {
+	if (!verifyPasscode(passcode, operator.passcode)) {
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
-	cookies.set('adminId', String(operator.id), {
+	// Successful login - clear rate limit
+	clearRateLimit(`admin-login:${clientIp}`);
+
+	const token = generateSessionToken();
+	const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000);
+
+	await db.insert(adminSessions).values({
+		token,
+		operatorId: operator.id,
+		expiresAt
+	});
+
+	cookies.set('adminSession', token, {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
-		maxAge: 60 * 60 * 24
+		secure: !dev,
+		maxAge: SESSION_MAX_AGE
 	});
 
 	return json({ operator: { id: operator.id, name: operator.name } });

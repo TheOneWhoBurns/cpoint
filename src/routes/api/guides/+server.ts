@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { guides, rentals } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { hashPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
@@ -56,7 +57,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		.insert(guides)
 		.values({
 			name,
-			passcode,
+			passcode: hashPasscode(passcode),
 			cooldownMinutes: cooldownMinutes || 30
 		})
 		.returning();
