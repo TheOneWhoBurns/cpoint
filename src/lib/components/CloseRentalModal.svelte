@@ -49,25 +49,21 @@
 	let passcodeError = $state('');
 
 	// Calculate price based on rental type and elapsed time
+	// Charges in half-hour increments, rounded to whole dollars
 	function calculatePrice(): number {
 		if (!rental?.pricing) return 0;
 		const pricing = rental.pricing;
 
 		if (pricing.type === 'fullDay') {
-			return pricing.fullDay || 0;
+			return Math.round(pricing.fullDay || 0);
 		} else if (pricing.type === 'hourly') {
 			const startTime = new Date(rental.startedAt).getTime();
 			const endTime = new Date().getTime();
 			const diffMs = endTime - startTime;
 			const diffMinutes = Math.floor(diffMs / (1000 * 60));
 			const hourlyRate = pricing.hourly || 0;
-
-			if (diffMinutes < 60) {
-				return hourlyRate;
-			} else {
-				const hours = Math.ceil(diffMinutes / 60);
-				return hourlyRate * hours;
-			}
+			const halfHours = Math.max(1, Math.ceil(diffMinutes / 30));
+			return Math.round((hourlyRate / 2) * halfHours);
 		}
 		return 0;
 	}
@@ -119,7 +115,7 @@
 
 	function handleClose() {
 		// Validate payment amounts
-		if (remainingToPay > 0.01 && !yetToPay) {
+		if (remainingToPay > 1 && !yetToPay) {
 			return; // Don't close if payment doesn't cover amount
 		}
 
@@ -181,14 +177,13 @@
 		return `${mins}m`;
 	}
 
-	function getHoursCharged(): number {
+	function getHalfHoursCharged(): number {
 		if (!rental?.pricing || rental.pricing.type !== 'hourly') return 0;
 		const startTime = new Date(rental.startedAt).getTime();
 		const endTime = new Date().getTime();
 		const diffMs = endTime - startTime;
 		const diffMinutes = Math.floor(diffMs / (1000 * 60));
-		if (diffMinutes < 60) return 1;
-		return Math.ceil(diffMinutes / 60);
+		return Math.max(1, Math.ceil(diffMinutes / 30));
 	}
 </script>
 
@@ -311,26 +306,26 @@
 						<div class="pricing-row">
 							<span class="md-body-medium">
 								{rental.pricing?.type === 'hourly'
-									? `${getHoursCharged()} hour${getHoursCharged() > 1 ? 's' : ''} @ $${rental.pricing?.hourly}/hr`
+									? `${getHalfHoursCharged()} x 30min @ $${rental.pricing?.hourly}/hr`
 									: 'Full Day Rate'}
 							</span>
-							<span class="md-title-medium">${calculatedPrice.toFixed(2)}</span>
+							<span class="md-title-medium">${calculatedPrice}</span>
 						</div>
 						{#if discountAmount > 0}
 							<div class="pricing-row discount">
 								<span class="md-body-medium">Discount</span>
-								<span class="md-title-medium">-${discountAmount.toFixed(2)}</span>
+								<span class="md-title-medium">-${discountAmount}</span>
 							</div>
 						{/if}
 						{#if yetToPay && yetToPayAmount > 0}
 							<div class="pricing-row unpaid">
 								<span class="md-body-medium">Yet to Pay (Unpaid)</span>
-								<span class="md-title-medium">-${yetToPayAmount.toFixed(2)}</span>
+								<span class="md-title-medium">-${yetToPayAmount}</span>
 							</div>
 						{/if}
 						<div class="pricing-row total">
 							<span class="md-title-medium">Amount Due Now</span>
-							<span class="md-headline-small">${amountDue.toFixed(2)}</span>
+							<span class="md-headline-small">${amountDue}</span>
 						</div>
 					</div>
 				</div>
@@ -352,7 +347,7 @@
 								<input
 									type="number"
 									min="0"
-									step="0.01"
+									step="1"
 									bind:value={cashAmount}
 									disabled={loading}
 									class="amount-input"
@@ -369,7 +364,7 @@
 								<input
 									type="number"
 									min="0"
-									step="0.01"
+									step="1"
 									bind:value={creditAmount}
 									disabled={loading}
 									class="amount-input"
@@ -380,17 +375,17 @@
 					<div class="payment-summary">
 						<div class="payment-summary-row">
 							<span class="md-body-medium">Total Payment</span>
-							<span class="md-title-medium">${paymentTotal.toFixed(2)}</span>
+							<span class="md-title-medium">${paymentTotal}</span>
 						</div>
-						{#if remainingToPay > 0.01}
+						{#if remainingToPay > 1}
 							<div class="payment-summary-row remaining">
 								<span class="md-body-medium">Remaining</span>
-								<span class="md-title-medium error">${remainingToPay.toFixed(2)}</span>
+								<span class="md-title-medium error">${remainingToPay}</span>
 							</div>
-						{:else if remainingToPay < -0.01}
+						{:else if remainingToPay < -1}
 							<div class="payment-summary-row change">
 								<span class="md-body-medium">Change Due</span>
-								<span class="md-title-medium">${Math.abs(remainingToPay).toFixed(2)}</span>
+								<span class="md-title-medium">${Math.abs(remainingToPay)}</span>
 							</div>
 						{:else}
 							<div class="payment-summary-row complete">
@@ -441,7 +436,7 @@
 										type="number"
 										min="0"
 										max={calculatedPrice}
-										step="0.01"
+										step="1"
 										bind:value={discountAmount}
 										disabled={loading}
 										class="amount-input"
@@ -470,7 +465,7 @@
 											type="number"
 											min="0"
 											max={priceAfterDiscount}
-											step="0.01"
+											step="1"
 											bind:value={yetToPayAmount}
 											disabled={loading}
 											class="amount-input"

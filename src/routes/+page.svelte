@@ -490,7 +490,7 @@
 									</div>
 									{#if pricing?.total}
 										<div class="price-badge">
-											${(pricing.total / 100).toFixed(2)}
+											${Math.round(pricing.total / 100)}
 										</div>
 									{/if}
 								</div>
@@ -806,11 +806,11 @@
 					</div>
 					<div class="summary-row">
 						<span class="md-body-medium">Cash</span>
-						<span class="md-title-medium">${shiftSummary.rentalsCash.toFixed(2)}</span>
+						<span class="md-title-medium">${shiftSummary.rentalsCash}</span>
 					</div>
 					<div class="summary-row">
 						<span class="md-body-medium">Credit</span>
-						<span class="md-title-medium">${shiftSummary.rentalsCredit.toFixed(2)}</span>
+						<span class="md-title-medium">${shiftSummary.rentalsCredit}</span>
 					</div>
 				</div>
 
@@ -822,7 +822,7 @@
 						</div>
 						<div class="summary-row">
 							<span class="md-body-medium">Total</span>
-							<span class="md-title-medium">${shiftSummary.storeSalesTotal.toFixed(2)}</span>
+							<span class="md-title-medium">${shiftSummary.storeSalesTotal}</span>
 						</div>
 					</div>
 				{/if}
@@ -834,11 +834,11 @@
 					</div>
 					<div class="summary-row total">
 						<span class="md-body-medium">Cash</span>
-						<span class="md-headline-small">${shiftSummary.totalCash.toFixed(2)}</span>
+						<span class="md-headline-small">${shiftSummary.totalCash}</span>
 					</div>
 					<div class="summary-row total">
 						<span class="md-body-medium">Credit</span>
-						<span class="md-headline-small">${shiftSummary.totalCredit.toFixed(2)}</span>
+						<span class="md-headline-small">${shiftSummary.totalCredit}</span>
 					</div>
 				</div>
 			</div>
@@ -878,7 +878,7 @@
 						<option value={null}>Choose a product...</option>
 						{#each data.storeProducts as product}
 							<option value={product.id}>
-								{product.name} - ${(product.price / 100).toFixed(2)} ({product.quantity} in stock)
+								{product.name} - ${Math.round(product.price / 100)} ({product.quantity} in stock)
 							</option>
 						{/each}
 					</select>

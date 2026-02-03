@@ -44,7 +44,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 	}
 
-	const storeSalesTotal = shiftSalesData.reduce((sum, s) => sum + s.total, 0) / 100;
+	const storeSalesTotal = Math.round(shiftSalesData.reduce((sum, s) => sum + s.total, 0) / 100);
 
 	return json({
 		rentalsCount: shiftRentals.length,

@@ -193,21 +193,18 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const pricing = rental.pricing as {type: string, hourly?: number, fullDay?: number};
 
 		// Calculate price based on rental type and elapsed time
+		// Charges in half-hour increments (minimum 1 half-hour), rounded to whole dollars
 		let calculatedPrice = 0;
 		if (pricing.type === 'fullDay') {
-			calculatedPrice = pricing.fullDay || 0;
+			calculatedPrice = Math.round(pricing.fullDay || 0);
 		} else if (pricing.type === 'hourly') {
 			const startTime = new Date(rental.startedAt).getTime();
 			const endTime = new Date().getTime();
 			const diffMs = endTime - startTime;
 			const diffMinutes = Math.floor(diffMs / (1000 * 60));
 			const hourlyRate = pricing.hourly || 0;
-			if (diffMinutes < 60) {
-				calculatedPrice = hourlyRate;
-			} else {
-				const hours = Math.ceil(diffMinutes / 60);
-				calculatedPrice = hourlyRate * hours;
-			}
+			const halfHours = Math.max(1, Math.ceil(diffMinutes / 30));
+			calculatedPrice = Math.round((hourlyRate / 2) * halfHours);
 		}
 
 		const discount = Math.max(0, Math.min(returnData?.discount || 0, calculatedPrice));
@@ -219,7 +216,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const yetToPay = Math.max(0, returnData?.yetToPay || 0);
 
 		const totalPayment = cashAmount + creditAmount + yetToPay;
-		if (Math.abs(totalPayment - finalPrice) > 0.01) {
+		if (Math.abs(totalPayment - finalPrice) > 1) {
 			return json({ error: 'Payment amounts do not match final price' }, { status: 400 });
 		}
 
