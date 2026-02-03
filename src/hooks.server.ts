@@ -12,7 +12,8 @@ const ADMIN_API_PREFIXES = [
 	'/api/tour-agency',
 	'/api/google/connect',
 	'/api/google/disconnect',
-	'/api/google/share-email'
+	'/api/google/share-email',
+	'/api/google/credentials'
 ];
 
 function isAdminApiRoute(pathname: string): boolean {
