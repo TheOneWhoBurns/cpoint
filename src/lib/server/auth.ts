@@ -42,6 +42,7 @@ const WINDOW_MS = 15 * 60 * 1000;
 
 export function checkRateLimit(key: string): { allowed: boolean; retryAfterSeconds?: number } {
 	const now = Date.now();
+	pruneExpiredEntries(now);
 	const entry = attempts.get(key);
 
 	if (entry && now < entry.resetAt) {
@@ -59,4 +60,18 @@ export function checkRateLimit(key: string): { allowed: boolean; retryAfterSecon
 
 export function clearRateLimit(key: string): void {
 	attempts.delete(key);
+}
+
+// Prune expired entries periodically to prevent memory leaks
+let lastPrune = 0;
+const PRUNE_INTERVAL_MS = 60 * 1000;
+
+function pruneExpiredEntries(now: number): void {
+	if (now - lastPrune < PRUNE_INTERVAL_MS) return;
+	lastPrune = now;
+	for (const [key, entry] of attempts) {
+		if (now >= entry.resetAt) {
+			attempts.delete(key);
+		}
+	}
 }

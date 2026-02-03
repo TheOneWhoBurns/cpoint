@@ -1,56 +1,90 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { storeSales, storeProducts } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { storeSales, storeProducts, shifts, operators } from '$lib/server/db/schema';
+import { eq, and, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, cookies }) => {
+	const operatorIdStr = cookies.get('operatorId');
+	if (!operatorIdStr) {
+		return json({ error: 'Not logged in' }, { status: 401 });
+	}
+
+	const operatorId = parseInt(operatorIdStr);
+	const [operator] = await db.select({ id: operators.id }).from(operators)
+		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true)));
+	if (!operator) {
+		cookies.delete('operatorId', { path: '/' });
+		return json({ error: 'Invalid session' }, { status: 401 });
+	}
+
 	const { shiftId, productId, quantity } = await request.json();
 
 	if (!shiftId) {
 		return json({ error: 'Shift ID required' }, { status: 400 });
 	}
 
+	// Verify shift belongs to this operator and is active
+	const [shift] = await db.select().from(shifts)
+		.where(and(eq(shifts.id, shiftId), eq(shifts.operatorId, operatorId), isNull(shifts.endedAt)));
+	if (!shift) {
+		return json({ error: 'Invalid or inactive shift' }, { status: 403 });
+	}
+
 	if (!productId) {
 		return json({ error: 'Product ID required' }, { status: 400 });
 	}
 
-	if (!quantity || quantity < 1) {
-		return json({ error: 'Valid quantity required' }, { status: 400 });
+	const parsedQty = Number(quantity);
+	if (!Number.isInteger(parsedQty) || parsedQty < 1 || parsedQty > 1000) {
+		return json({ error: 'Valid quantity required (1-1000)' }, { status: 400 });
 	}
 
-	const [product] = await db.select().from(storeProducts).where(eq(storeProducts.id, productId));
+	const result = await db.transaction(async (tx) => {
+		const [product] = await tx.select().from(storeProducts).where(eq(storeProducts.id, productId));
 
-	if (!product) {
-		return json({ error: 'Product not found' }, { status: 404 });
+		if (!product) {
+			return { error: 'Product not found', status: 404 };
+		}
+
+		if ((product.quantity ?? 0) < parsedQty) {
+			return { error: `Not enough stock (have ${product.quantity}, need ${parsedQty})`, status: 400 };
+		}
+
+		const total = product.price * parsedQty;
+
+		const [sale] = await tx
+			.insert(storeSales)
+			.values({
+				shiftId,
+				productId,
+				quantity: parsedQty,
+				unitPrice: product.price,
+				total
+			})
+			.returning();
+
+		await tx
+			.update(storeProducts)
+			.set({ quantity: (product.quantity ?? 0) - parsedQty })
+			.where(eq(storeProducts.id, productId));
+
+		return { sale };
+	});
+
+	if ('error' in result) {
+		return json({ error: result.error }, { status: result.status });
 	}
 
-	if ((product.quantity ?? 0) < quantity) {
-		return json({ error: `Not enough stock (have ${product.quantity}, need ${quantity})` }, { status: 400 });
-	}
-
-	const total = product.price * quantity;
-
-	const [sale] = await db
-		.insert(storeSales)
-		.values({
-			shiftId,
-			productId,
-			quantity,
-			unitPrice: product.price,
-			total
-		})
-		.returning();
-
-	await db
-		.update(storeProducts)
-		.set({ quantity: (product.quantity ?? 0) - quantity })
-		.where(eq(storeProducts.id, productId));
-
-	return json(sale, { status: 201 });
+	return json(result.sale, { status: 201 });
 };
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, cookies }) => {
+	const operatorIdStr = cookies.get('operatorId');
+	if (!operatorIdStr) {
+		return json({ error: 'Not logged in' }, { status: 401 });
+	}
+
 	const shiftIdStr = url.searchParams.get('shiftId');
 
 	if (!shiftIdStr) {

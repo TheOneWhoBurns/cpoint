@@ -14,6 +14,8 @@ interface ReservationItem {
 	quantity?: number;
 }
 
+const MAX_ITEMS_PER_RENTAL = 50;
+
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const { productId, customer, items, rentalType, quantity = 1, shiftId, guideId = null, overrideReservationIds, operatorPasscode, fromReservationId } = await request.json();
 
@@ -21,16 +23,44 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Product ID required' }, { status: 400 });
 	}
 
-	if (!customer || !customer.name) {
+	if (!customer || typeof customer !== 'object' || !customer.name || typeof customer.name !== 'string') {
 		return json({ error: 'Customer name required' }, { status: 400 });
 	}
 
-	if (!items || items.length === 0) {
+	if (!Array.isArray(items) || items.length === 0) {
 		return json({ error: 'At least one item required' }, { status: 400 });
+	}
+
+	if (items.length > MAX_ITEMS_PER_RENTAL) {
+		return json({ error: `Too many items (max ${MAX_ITEMS_PER_RENTAL})` }, { status: 400 });
+	}
+
+	// Validate item structure
+	for (const item of items) {
+		if (!item.type || !['tracked', 'generic'].includes(item.type)) {
+			return json({ error: 'Each item must have a valid type' }, { status: 400 });
+		}
+		if (item.type === 'tracked' && (!item.itemId || typeof item.itemId !== 'number')) {
+			return json({ error: 'Tracked items require a numeric itemId' }, { status: 400 });
+		}
+		if (item.type === 'generic' && (!item.categoryId || typeof item.categoryId !== 'number')) {
+			return json({ error: 'Generic items require a numeric categoryId' }, { status: 400 });
+		}
+		if (item.quantity !== undefined) {
+			const qty = Number(item.quantity);
+			if (!Number.isInteger(qty) || qty < 1 || qty > 1000) {
+				return json({ error: 'Item quantity must be an integer between 1 and 1000' }, { status: 400 });
+			}
+		}
 	}
 
 	if (!rentalType || !['hourly', 'fullDay'].includes(rentalType)) {
 		return json({ error: 'Valid rental type required' }, { status: 400 });
+	}
+
+	const parsedQuantity = Number(quantity);
+	if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 100) {
+		return json({ error: 'Quantity must be an integer between 1 and 100' }, { status: 400 });
 	}
 
 	const [product] = await db.select().from(rentalProducts).where(eq(rentalProducts.id, productId));
@@ -59,23 +89,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			if (now < returnTime + cooldownMs) {
 				const minutesLeft = Math.ceil((returnTime + cooldownMs - now) / 60000);
 				return json({ error: `Guide is on cooldown for ${minutesLeft} more minute(s)` }, { status: 400 });
-			}
-		}
-	}
-
-	for (const item of items) {
-		if (item.type === 'tracked') {
-			const [tracked] = await db.select().from(trackedItems).where(eq(trackedItems.id, item.itemId));
-			if (!tracked || tracked.status !== 'available') {
-				return json({ error: `Item ${item.code || item.itemId} is no longer available` }, { status: 400 });
-			}
-		} else if (item.type === 'generic') {
-			const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
-			if (!cat) {
-				return json({ error: `Category not found` }, { status: 400 });
-			}
-			if ((cat.availableQuantity ?? 0) < (item.quantity || 1)) {
-				return json({ error: `Not enough ${cat.name} available (need ${item.quantity}, have ${cat.availableQuantity})` }, { status: 400 });
 			}
 		}
 	}
@@ -153,54 +166,72 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 	}
 
-	for (const item of items) {
-		if (item.type === 'tracked') {
-			await db
-				.update(trackedItems)
-				.set({ status: 'rented' })
-				.where(eq(trackedItems.id, item.itemId));
-		} else if (item.type === 'generic') {
-			const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
-			if (cat) {
-				await db
+	// Run inventory check + claim + rental insert inside a transaction
+	const result = await db.transaction(async (tx) => {
+		// Validate and claim inventory atomically
+		for (const item of items) {
+			if (item.type === 'tracked') {
+				const [tracked] = await tx.select().from(trackedItems).where(eq(trackedItems.id, item.itemId));
+				if (!tracked || tracked.status !== 'available') {
+					return { error: `Item ${item.code || item.itemId} is no longer available`, status: 400 };
+				}
+				await tx
+					.update(trackedItems)
+					.set({ status: 'rented' })
+					.where(eq(trackedItems.id, item.itemId));
+			} else if (item.type === 'generic') {
+				const [cat] = await tx.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
+				if (!cat) {
+					return { error: 'Category not found', status: 400 };
+				}
+				if ((cat.availableQuantity ?? 0) < (item.quantity || 1)) {
+					return { error: `Not enough ${cat.name} available (need ${item.quantity}, have ${cat.availableQuantity})`, status: 400 };
+				}
+				await tx
 					.update(productTypes)
 					.set({ availableQuantity: (cat.availableQuantity ?? 0) - (item.quantity || 1) })
 					.where(eq(productTypes.id, item.categoryId));
 			}
 		}
+
+		const productPricing = product.pricing as { hourly?: number; fullDay?: number };
+
+		const [created] = await tx
+			.insert(rentals)
+			.values({
+				shiftId,
+				customer: { name: String(customer.name), hotel: customer.hotel ? String(customer.hotel) : undefined, phone: customer.phone ? String(customer.phone) : undefined },
+				items,
+				pricing: {
+					type: rentalType,
+					hourly: productPricing.hourly,
+					fullDay: productPricing.fullDay
+				},
+				quantity: parsedQuantity,
+				guideId: guideId || null,
+				status: 'active'
+			})
+			.returning();
+
+		return { created };
+	});
+
+	if ('error' in result) {
+		return json({ error: result.error }, { status: result.status });
 	}
 
-	const productPricing = product.pricing as { hourly?: number; fullDay?: number };
-
-	const [created] = await db
-		.insert(rentals)
-		.values({
-			shiftId,
-			customer,
-			items,
-			pricing: {
-				type: rentalType,
-				hourly: productPricing.hourly,
-				fullDay: productPricing.fullDay
-			},
-			quantity,
-			guideId: guideId || null,
-			status: 'active'
-		})
-		.returning();
-
-	// If fulfilling from a reservation, mark it as fulfilled
+	// If fulfilling from a reservation, mark it as fulfilled (outside transaction is fine)
 	if (fromReservationId) {
 		await db
 			.update(reservations)
 			.set({
 				status: 'fulfilled',
-				fulfilledByRentalId: created.id
+				fulfilledByRentalId: result.created.id
 			})
 			.where(eq(reservations.id, fromReservationId));
 	}
 
-	return json(created, { status: 201 });
+	return json(result.created, { status: 201 });
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
@@ -240,6 +271,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		// Handle item changes - release old items, claim new items
 		if (newItems !== undefined && Array.isArray(newItems)) {
+			if (newItems.length > MAX_ITEMS_PER_RENTAL) {
+				return json({ error: `Too many items (max ${MAX_ITEMS_PER_RENTAL})` }, { status: 400 });
+			}
+
 			const oldItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
 
 			// Validate new items availability (excluding items already in this rental)
@@ -392,13 +427,13 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			calculatedPrice = Math.round((hourlyRate / 2) * halfHours);
 		}
 
-		const discount = Math.max(0, Math.min(returnData?.discount || 0, calculatedPrice));
+		const discount = Math.max(0, Math.min(Number(returnData?.discount) || 0, calculatedPrice));
 		const serverFinalPrice = calculatedPrice - discount;
 		const finalPrice = Math.max(0, serverFinalPrice);
 
-		const cashAmount = Math.max(0, returnData?.cashAmount ?? 0);
-		const creditAmount = Math.max(0, returnData?.creditAmount ?? 0);
-		const yetToPay = Math.max(0, returnData?.yetToPay || 0);
+		const cashAmount = Math.max(0, Number(returnData?.cashAmount) || 0);
+		const creditAmount = Math.max(0, Number(returnData?.creditAmount) || 0);
+		const yetToPay = Math.max(0, Number(returnData?.yetToPay) || 0);
 
 		const totalPayment = cashAmount + creditAmount + yetToPay;
 		if (Math.abs(totalPayment - finalPrice) > 0) {
