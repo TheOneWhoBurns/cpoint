@@ -125,7 +125,7 @@
 
 	function handleClose() {
 		// Validate payment amounts
-		if (remainingToPay > 1 && !yetToPay) {
+		if (remainingToPay > 0 && !yetToPay) {
 			return; // Don't close if payment doesn't cover amount
 		}
 
