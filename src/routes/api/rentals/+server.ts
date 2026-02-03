@@ -392,7 +392,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const yetToPay = Math.max(0, returnData?.yetToPay || 0);
 
 		const totalPayment = cashAmount + creditAmount + yetToPay;
-		if (Math.abs(totalPayment - finalPrice) > 1) {
+		if (Math.abs(totalPayment - finalPrice) > 0) {
 			return json({ error: 'Payment amounts do not match final price' }, { status: 400 });
 		}
 
