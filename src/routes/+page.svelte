@@ -1896,7 +1896,7 @@
 <CloseRentalModal
 	bind:open={closeRentalModalOpen}
 	rental={selectedRentalToClose}
-	operatorPasscode={$shiftStore.operator?.passcode || ''}
+	operatorId={$shiftStore.operator?.id || 0}
 	onClose={executeCloseRental}
 	onCancel={() => { closeRentalModalOpen = false; }}
 />

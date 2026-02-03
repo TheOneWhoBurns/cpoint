@@ -1,11 +1,11 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { verifyPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async ({ request }) => {
 	let body;
 	try {
 		body = await request.json();
@@ -22,7 +22,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const [operator] = await db
 		.select()
 		.from(operators)
-		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true), eq(operators.isAdmin, true)));
+		.where(eq(operators.id, operatorId));
 
 	if (!operator) {
 		return json({ error: 'Invalid credentials' }, { status: 401 });
@@ -33,12 +33,5 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
-	cookies.set('adminId', String(operator.id), {
-		path: '/',
-		httpOnly: true,
-		sameSite: 'lax',
-		maxAge: 60 * 60 * 24
-	});
-
-	return json({ operator: { id: operator.id, name: operator.name } });
+	return json({ success: true });
 };

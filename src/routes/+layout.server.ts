@@ -36,5 +36,6 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
 		return { operator: null, shift: null };
 	}
 
-	return { operator, shift: activeShift };
+	const { passcode: _, ...safeOperator } = operator;
+	return { operator: safeOperator, shift: activeShift };
 };

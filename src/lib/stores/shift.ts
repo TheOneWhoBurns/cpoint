@@ -1,8 +1,10 @@
 import { writable } from 'svelte/store';
 import type { Operator, Shift } from '$lib/server/db/schema';
 
+type SafeOperator = Omit<Operator, 'passcode'>;
+
 interface ShiftState {
-	operator: Operator | null;
+	operator: SafeOperator | null;
 	shift: Shift | null;
 	isLoggedIn: boolean;
 }
@@ -16,13 +18,13 @@ function createShiftStore() {
 
 	return {
 		subscribe,
-		setSession: (operator: Operator, shift: Shift) => {
+		setSession: (operator: SafeOperator, shift: Shift) => {
 			set({ operator, shift, isLoggedIn: true });
 		},
 		clearSession: () => {
 			set({ operator: null, shift: null, isLoggedIn: false });
 		},
-		login: async (operator: Operator, shift: Shift) => {
+		login: async (operator: SafeOperator, shift: Shift) => {
 			set({ operator, shift, isLoggedIn: true });
 		},
 		logout: async () => {
