@@ -31,7 +31,9 @@ export const GET: RequestHandler = async () => {
 			const cooldownEnd = new Date(lastReturnedAt);
 			cooldownEnd.setMinutes(cooldownEnd.getMinutes() + (guide.cooldownMinutes ?? 30));
 			inCooldown = now < cooldownEnd;
-			minutesRemaining = Math.ceil((cooldownEnd.getTime() - now.getTime()) / 60000);
+			minutesRemaining = inCooldown
+				? Math.ceil((cooldownEnd.getTime() - now.getTime()) / 60000)
+				: 0;
 		}
 
 		return {
