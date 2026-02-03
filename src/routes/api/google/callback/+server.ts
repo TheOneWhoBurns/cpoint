@@ -3,6 +3,13 @@ import { handleCallback } from '$lib/server/google-sheets';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
+	const errorParam = url.searchParams.get('error');
+	if (errorParam) {
+		cookies.delete('google_oauth_state', { path: '/' });
+		const mapped = errorParam === 'access_denied' ? 'access_denied' : 'auth_failed';
+		redirect(302, `/admin/settings?error=${mapped}`);
+	}
+
 	const code = url.searchParams.get('code');
 	const state = url.searchParams.get('state');
 	const storedState = cookies.get('google_oauth_state');

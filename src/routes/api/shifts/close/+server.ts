@@ -5,6 +5,24 @@ import type { RequestHandler } from './$types';
 import * as XLSX from 'xlsx';
 import { isGoogleConnected, createSpreadsheet } from '$lib/server/google-sheets';
 
+function formatDateTime(date: Date | string): string {
+	const d = new Date(date);
+	const year = d.getUTCFullYear();
+	const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+	const day = String(d.getUTCDate()).padStart(2, '0');
+	const hours = String(d.getUTCHours()).padStart(2, '0');
+	const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+	return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function formatDate(date: Date | string): string {
+	const d = new Date(date);
+	const year = d.getUTCFullYear();
+	const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+	const day = String(d.getUTCDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+}
+
 interface RentalItem {
 	name: string;
 	code?: string;
@@ -137,8 +155,8 @@ export const POST: RequestHandler = async ({ cookies }) => {
 			'Phone': customer?.phone || '',
 			'Items': items.map(i => i.name + (i.code ? ` (${i.code})` : '') + (i.quantity ? ` x${i.quantity}` : '')).join(', '),
 			'Type': pricing?.type === 'hourly' ? 'Hourly' : 'Full Day',
-			'Start': new Date(r.startedAt).toLocaleString(),
-			'End': r.returnedAt ? new Date(r.returnedAt).toLocaleString() : 'Active',
+			'Start': formatDateTime(r.startedAt),
+			'End': r.returnedAt ? formatDateTime(r.returnedAt) : 'Active',
 			'Duration (min)': duration || 'N/A',
 			'Price ($)': pricing?.calculatedPrice ?? pricing?.total ?? 0,
 			'Discount ($)': discount,
@@ -199,7 +217,7 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		'Quantity': s.quantity,
 		'Unit Price ($)': Math.round(s.unitPrice / 100),
 		'Total ($)': Math.round(s.total / 100),
-		'Time': s.createdAt ? new Date(s.createdAt).toLocaleString() : ''
+		'Time': s.createdAt ? formatDateTime(s.createdAt) : ''
 	}));
 
 	salesData.push({
@@ -218,8 +236,8 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		'Revenue ($)': Math.round(b.totalPrice / 100),
 		'Cost ($)': b.cost !== null ? Math.round(b.cost / 100) : 'Pending',
 		'Profit ($)': b.cost !== null ? Math.round((b.totalPrice - b.cost) / 100) : 'Pending',
-		'Booked': b.bookedAt ? new Date(b.bookedAt).toLocaleDateString() : '',
-		'Activity Date': b.activityDate ? new Date(b.activityDate).toLocaleDateString() : '',
+		'Booked': b.bookedAt ? formatDate(b.bookedAt) : '',
+		'Activity Date': b.activityDate ? formatDate(b.activityDate) : '',
 		'Status': b.status
 	}));
 
