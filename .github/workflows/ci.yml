@@ -36,14 +36,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint || true
-
       - name: Type check
-        run: npm run check || true
-
-      - name: Run tests
-        run: npm run test || true
+        run: npm run check
         env:
           DATABASE_URL: postgresql://rental:testpass@localhost:5432/rental_manager_test
 

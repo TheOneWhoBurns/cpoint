@@ -46,12 +46,18 @@ export async function handleCallback(code: string) {
 	return tokens;
 }
 
+const CLIENT_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
 let cachedClient: InstanceType<typeof google.auth.OAuth2> | null = null;
+let cachedAt = 0;
 
 async function getAuthenticatedClient() {
-	if (cachedClient) {
+	if (cachedClient && Date.now() - cachedAt < CLIENT_CACHE_TTL_MS) {
 		return cachedClient;
 	}
+
+	// Clear stale client so listeners don't linger
+	cachedClient = null;
 
 	const [setting] = await db
 		.select()
@@ -62,12 +68,17 @@ async function getAuthenticatedClient() {
 		throw new Error('Google account not connected. Please connect via Admin > Settings.');
 	}
 
-	const tokens = setting.value as Record<string, unknown>;
 	const client = getOAuth2Client();
-	client.setCredentials(tokens);
+	client.setCredentials(setting.value as Record<string, unknown>);
 
 	client.on('tokens', async (newTokens) => {
-		const merged = { ...tokens, ...newTokens };
+		// Read current tokens from DB to avoid merging with stale closure data
+		const [current] = await db
+			.select()
+			.from(appSettings)
+			.where(eq(appSettings.key, 'google_tokens'));
+		const existing = (current?.value as Record<string, unknown>) || {};
+		const merged = { ...existing, ...newTokens };
 		await db
 			.update(appSettings)
 			.set({ value: merged, updatedAt: new Date() })
@@ -75,6 +86,7 @@ async function getAuthenticatedClient() {
 	});
 
 	cachedClient = client;
+	cachedAt = Date.now();
 	return client;
 }
 
@@ -91,6 +103,7 @@ export async function isGoogleConnected(): Promise<boolean> {
 
 export async function disconnectGoogle() {
 	cachedClient = null;
+	cachedAt = 0;
 	await db
 		.delete(appSettings)
 		.where(eq(appSettings.key, 'google_tokens'));
