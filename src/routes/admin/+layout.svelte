@@ -42,6 +42,7 @@
 	const navItems = $derived([
 		{ href: dashboardHref, label: 'Dashboard', icon: 'dashboard' },
 		{ href: `${adminBase}/operators`, label: 'Operators', icon: 'badge' },
+		{ href: `${adminBase}/hours`, label: 'Hours', icon: 'schedule' },
 		{ href: `${adminBase}/equipment`, label: 'Equipment', icon: 'handyman' },
 		{ href: `${adminBase}/rental-products`, label: 'Rental Products', icon: 'inventory_2' },
 		{ href: `${adminBase}/store-products`, label: 'Store Products', icon: 'shopping_bag' },
@@ -118,6 +119,8 @@
 				<h1 class="md-title-large" style="flex: 1;">
 					{#if $page.url.pathname === dashboardHref}
 						Dashboard
+					{:else if $page.url.pathname.includes('/hours')}
+						Operator Hours
 					{:else if $page.url.pathname.includes('/operators')}
 						Operators
 					{:else if $page.url.pathname.includes('/equipment')}
