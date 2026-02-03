@@ -15,7 +15,7 @@
 		try {
 			const res = await fetch('/api/admin/logout', { method: 'POST' });
 			if (res.ok) {
-				goto('/admin/login');
+				goto(`${adminBase}/login`);
 			} else {
 				loggingOut = false;
 			}
@@ -36,24 +36,28 @@
 		return theme === 'dark';
 	}
 
-	const navItems = [
-		{ href: '/admin', label: 'Dashboard', icon: 'dashboard' },
-		{ href: '/admin/operators', label: 'Operators', icon: 'badge' },
-		{ href: '/admin/equipment', label: 'Equipment', icon: 'handyman' },
-		{ href: '/admin/rental-products', label: 'Rental Products', icon: 'inventory_2' },
-		{ href: '/admin/store-products', label: 'Store Products', icon: 'shopping_bag' },
-		{ href: '/admin/guides', label: 'Guides', icon: 'hiking' },
-		{ href: '/admin/tour-agency', label: 'Tour Agency', icon: 'tour' },
-		{ href: '/admin/inventory', label: 'Inventory', icon: 'warehouse' },
-		{ href: '/admin/settings', label: 'Settings', icon: 'settings' },
-		{ href: '/admin/closing-checklist', label: 'Closing Checklist', icon: 'checklist' }
-	];
+	const adminBase = $derived(data.adminBase ?? '/admin');
+	const dashboardHref = $derived(adminBase || '/');
 
-	const isLoginPage = $derived($page.url.pathname === '/admin/login');
+	const navItems = $derived([
+		{ href: dashboardHref, label: 'Dashboard', icon: 'dashboard' },
+		{ href: `${adminBase}/operators`, label: 'Operators', icon: 'badge' },
+		{ href: `${adminBase}/equipment`, label: 'Equipment', icon: 'handyman' },
+		{ href: `${adminBase}/rental-products`, label: 'Rental Products', icon: 'inventory_2' },
+		{ href: `${adminBase}/store-products`, label: 'Store Products', icon: 'shopping_bag' },
+		{ href: `${adminBase}/guides`, label: 'Guides', icon: 'hiking' },
+		{ href: `${adminBase}/tour-agency`, label: 'Tour Agency', icon: 'tour' },
+		{ href: `${adminBase}/inventory`, label: 'Inventory', icon: 'warehouse' },
+		{ href: `${adminBase}/settings`, label: 'Settings', icon: 'settings' },
+		{ href: `${adminBase}/closing-checklist`, label: 'Closing Checklist', icon: 'checklist' }
+	]);
+
+	const isLoginPage = $derived($page.url.pathname === `${adminBase}/login`);
+	const onSubdomain = $derived(adminBase === '');
 
 	function isActive(href: string, currentPath: string): boolean {
-		if (href === '/admin') {
-			return currentPath === '/admin';
+		if (href === dashboardHref) {
+			return currentPath === dashboardHref;
 		}
 		return currentPath.startsWith(href);
 	}
@@ -97,10 +101,12 @@
 					<span class="md-label-large">{loggingOut ? 'Logging out...' : 'Logout'}</span>
 				</button>
 			{/if}
-			<a href="/" class="back-link">
-				<span class="material-symbols-rounded">arrow_back</span>
-				<span class="md-label-large">Back to App</span>
-			</a>
+			{#if !onSubdomain}
+				<a href="/" class="back-link">
+					<span class="material-symbols-rounded">arrow_back</span>
+					<span class="md-label-large">Back to App</span>
+				</a>
+			{/if}
 		</div>
 	</aside>
 
@@ -110,7 +116,7 @@
 		<header class="admin-topbar">
 			<div class="topbar-title">
 				<h1 class="md-title-large" style="flex: 1;">
-					{#if $page.url.pathname === '/admin'}
+					{#if $page.url.pathname === dashboardHref}
 						Dashboard
 					{:else if $page.url.pathname.includes('/operators')}
 						Operators

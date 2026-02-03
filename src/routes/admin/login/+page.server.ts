@@ -4,7 +4,8 @@ import { operators, adminSessions } from '$lib/server/db/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ cookies }) => {
+export const load: PageServerLoad = async ({ cookies, locals }) => {
+	const adminBase = locals.adminBase;
 	const token = cookies.get('adminSession');
 	if (token) {
 		const [session] = await db
@@ -18,7 +19,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 				.from(operators)
 				.where(and(eq(operators.id, session.operatorId), eq(operators.isActive, true), eq(operators.isAdmin, true)));
 			if (admin) {
-				redirect(302, '/admin');
+				redirect(302, adminBase || '/');
 			}
 		}
 		cookies.delete('adminSession', { path: '/' });

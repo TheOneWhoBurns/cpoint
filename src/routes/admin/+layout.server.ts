@@ -4,14 +4,16 @@ import { operators, adminSessions } from '$lib/server/db/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ cookies, url }) => {
-	if (url.pathname === '/admin/login') {
-		return {};
+export const load: LayoutServerLoad = async ({ cookies, url, locals }) => {
+	const loginPath = `${locals.adminBase}/login`;
+
+	if (url.pathname === loginPath) {
+		return { adminBase: locals.adminBase };
 	}
 
 	const token = cookies.get('adminSession');
 	if (!token) {
-		redirect(302, '/admin/login');
+		redirect(302, loginPath);
 	}
 
 	const [session] = await db
@@ -21,7 +23,7 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
 
 	if (!session) {
 		cookies.delete('adminSession', { path: '/' });
-		redirect(302, '/admin/login');
+		redirect(302, loginPath);
 	}
 
 	const [admin] = await db
@@ -32,8 +34,8 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
 	if (!admin) {
 		await db.delete(adminSessions).where(eq(adminSessions.token, token));
 		cookies.delete('adminSession', { path: '/' });
-		redirect(302, '/admin/login');
+		redirect(302, loginPath);
 	}
 
-	return { admin };
+	return { admin, adminBase: locals.adminBase };
 };
