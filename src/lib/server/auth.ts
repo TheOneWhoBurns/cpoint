@@ -37,7 +37,7 @@ export function generateSessionToken(): string {
 
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 20;
 const WINDOW_MS = 15 * 60 * 1000;
 
 export function checkRateLimit(key: string): { allowed: boolean; retryAfterSeconds?: number } {
