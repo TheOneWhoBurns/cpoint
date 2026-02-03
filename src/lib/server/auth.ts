@@ -22,7 +22,13 @@ export async function verifyPasscode(passcode: string, stored: string): Promise<
 	if (stored.startsWith('$2a$') || stored.startsWith('$2b$')) {
 		return bcrypt.compare(passcode, stored);
 	}
-	return passcode === stored;
+	// Reject plaintext-stored passcodes — they must be rehashed
+	console.warn('[SECURITY] Rejected login attempt against unhashed passcode. Passcode must be rehashed.');
+	return false;
+}
+
+export function logAuthFailure(endpoint: string, identifier: string, ip: string): void {
+	console.warn(`[AUTH_FAILURE] endpoint=${endpoint} identifier=${identifier} ip=${ip} time=${new Date().toISOString()}`);
 }
 
 export function generateSessionToken(): string {
@@ -31,7 +37,7 @@ export function generateSessionToken(): string {
 
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 20;
 const WINDOW_MS = 15 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -47,6 +53,7 @@ setInterval(() => {
 
 export function checkRateLimit(key: string): { allowed: boolean; retryAfterSeconds?: number } {
 	const now = Date.now();
+	pruneExpiredEntries(now);
 	const entry = attempts.get(key);
 
 	if (entry && now < entry.resetAt) {
@@ -64,4 +71,18 @@ export function checkRateLimit(key: string): { allowed: boolean; retryAfterSecon
 
 export function clearRateLimit(key: string): void {
 	attempts.delete(key);
+}
+
+// Prune expired entries periodically to prevent memory leaks
+let lastPrune = 0;
+const PRUNE_INTERVAL_MS = 60 * 1000;
+
+function pruneExpiredEntries(now: number): void {
+	if (now - lastPrune < PRUNE_INTERVAL_MS) return;
+	lastPrune = now;
+	for (const [key, entry] of attempts) {
+		if (now >= entry.resetAt) {
+			attempts.delete(key);
+		}
+	}
 }

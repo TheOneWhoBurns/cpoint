@@ -1,11 +1,24 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { shifts, rentals } from '$lib/server/db/schema';
+import { shifts, rentals, operators } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, cookies }) => {
+	const operatorIdStr = cookies.get('operatorId');
+	if (!operatorIdStr) {
+		return json({ error: 'Not logged in' }, { status: 401 });
+	}
+
+	const operatorId = parseInt(operatorIdStr);
+	const [operator] = await db.select({ id: operators.id }).from(operators)
+		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true)));
+	if (!operator) {
+		cookies.delete('operatorId', { path: '/' });
+		return json({ error: 'Invalid session' }, { status: 401 });
+	}
+
 	const { shiftId } = await request.json();
 
 	if (!shiftId) {
@@ -19,6 +32,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	if (!shift) {
 		return json({ error: 'Active shift not found' }, { status: 404 });
+	}
+
+	if (shift.operatorId !== operatorId) {
+		return json({ error: 'Cannot end another operator\'s shift' }, { status: 403 });
 	}
 
 	const shiftRentals = await db
