@@ -1,10 +1,23 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import '@material/web/button/text-button.js';
 	import '@material/web/button/filled-tonal-button.js';
 	import '@material/web/iconbutton/icon-button.js';
 
-	let { children } = $props();
+	let { children, data } = $props();
+
+	let loggingOut = $state(false);
+
+	async function handleLogout() {
+		loggingOut = true;
+		try {
+			await fetch('/api/admin/logout', { method: 'POST' });
+			goto('/admin/login');
+		} catch {
+			loggingOut = false;
+		}
+	}
 
 	const navItems = [
 		{ href: '/admin', label: 'Dashboard', icon: 'dashboard' },
@@ -18,6 +31,8 @@
 		{ href: '/admin/settings', label: 'Settings', icon: 'settings' }
 	];
 
+	const isLoginPage = $derived($page.url.pathname === '/admin/login');
+
 	function isActive(href: string, currentPath: string): boolean {
 		if (href === '/admin') {
 			return currentPath === '/admin';
@@ -26,6 +41,9 @@
 	}
 </script>
 
+{#if isLoginPage}
+	{@render children()}
+{:else}
 <div class="admin-layout">
 	<!-- Sidebar Navigation -->
 	<aside class="admin-sidebar">
@@ -51,6 +69,16 @@
 		</nav>
 
 		<div class="sidebar-footer">
+			{#if data.admin}
+				<div class="admin-info">
+					<span class="material-symbols-rounded">shield_person</span>
+					<span class="md-label-large">{data.admin.name}</span>
+				</div>
+				<button class="logout-link" onclick={handleLogout} disabled={loggingOut}>
+					<span class="material-symbols-rounded">logout</span>
+					<span class="md-label-large">{loggingOut ? 'Logging out...' : 'Logout'}</span>
+				</button>
+			{/if}
 			<a href="/" class="back-link">
 				<span class="material-symbols-rounded">arrow_back</span>
 				<span class="md-label-large">Back to App</span>
@@ -109,6 +137,7 @@
 		{/each}
 	</nav>
 </div>
+{/if}
 
 <style>
 	.admin-layout {
@@ -205,6 +234,42 @@
 
 	.back-link:hover {
 		background: var(--md-sys-color-primary-container);
+	}
+
+	.admin-info {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-lg);
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.admin-info .material-symbols-rounded {
+		font-size: 20px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.logout-link {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		color: var(--md-sys-color-error);
+		background: none;
+		border: none;
+		border-radius: var(--md-sys-shape-corner-full);
+		cursor: pointer;
+		width: 100%;
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.logout-link:hover {
+		background: var(--md-sys-color-error-container);
+	}
+
+	.logout-link:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	/* Main Content Area */

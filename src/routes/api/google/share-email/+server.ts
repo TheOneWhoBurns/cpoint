@@ -3,12 +3,7 @@ import { appSettings } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
-	const operatorId = cookies.get('operatorId');
-	if (!operatorId) {
-		return new Response(JSON.stringify({ error: 'Not authenticated' }), { status: 401 });
-	}
-
+export const POST: RequestHandler = async ({ request }) => {
 	const { email } = await request.json();
 
 	if (email) {

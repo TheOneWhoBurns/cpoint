@@ -5,6 +5,7 @@ export const operators = pgTable('operators', {
 	name: text('name').notNull(),
 	passcode: text('passcode').notNull(),
 	isActive: boolean('is_active').default(true),
+	isAdmin: boolean('is_admin').default(false),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
 

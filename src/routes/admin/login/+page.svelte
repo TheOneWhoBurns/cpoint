@@ -1,25 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { shiftStore } from '$lib/stores/shift';
 	import '@material/web/button/filled-button.js';
-	import '@material/web/button/outlined-button.js';
 	import '@material/web/button/text-button.js';
 	import '@material/web/textfield/outlined-text-field.js';
 	import '@material/web/progress/circular-progress.js';
 
 	let { data } = $props();
 
-	let selectedOperator: typeof data.operators[0] | null = $state(null);
+	let selectedAdmin: typeof data.adminOperators[0] | null = $state(null);
 	let passcode = $state('');
 	let error = $state('');
 	let loading = $state(false);
 
 	async function handleLogin() {
-		if (!selectedOperator) {
-			error = 'Please select an operator';
+		if (!selectedAdmin) {
+			error = 'Please select an admin';
 			return;
 		}
-
 		if (passcode.length !== 4) {
 			error = 'Passcode must be 4 digits';
 			return;
@@ -29,44 +26,39 @@
 		error = '';
 
 		try {
-			const response = await fetch('/api/shifts/start', {
+			const response = await fetch('/api/admin/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					operatorId: selectedOperator.id,
-					passcode
-				})
+				body: JSON.stringify({ operatorId: selectedAdmin.id, passcode })
 			});
 
 			if (!response.ok) {
 				const data = await response.json();
-				error = data.error || 'Failed to start shift';
+				error = data.error || 'Failed to log in';
 				loading = false;
 				return;
 			}
 
-			const result = await response.json();
-			shiftStore.setSession(result.operator, result.shift);
-			goto('/');
-		} catch (e) {
+			goto('/admin');
+		} catch {
 			error = 'Connection error';
 			loading = false;
 		}
 	}
 
-	function selectOperator(operator: typeof data.operators[0]) {
-		selectedOperator = operator;
+	function selectAdmin(admin: typeof data.adminOperators[0]) {
+		selectedAdmin = admin;
 		error = '';
 	}
 
 	function handleBack() {
-		selectedOperator = null;
+		selectedAdmin = null;
 		passcode = '';
 		error = '';
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' && selectedOperator && passcode.length === 4) {
+		if (event.key === 'Enter' && selectedAdmin && passcode.length === 4) {
 			handleLogin();
 		}
 	}
@@ -75,112 +67,99 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="login-page">
-	<div class="login-card md-animate-scale-in">
-		<!-- Header -->
+	<div class="login-card">
 		<header class="login-header">
 			<div class="logo-container">
-				<span class="material-symbols-rounded filled logo-icon">storefront</span>
+				<span class="material-symbols-rounded filled logo-icon">admin_panel_settings</span>
 			</div>
-			<h1 class="md-headline-medium">Start Your Shift</h1>
-			<p class="md-body-medium subtitle">Select your profile and enter your passcode to begin</p>
+			<h1 class="md-headline-medium">Admin Login</h1>
+			<p class="md-body-medium subtitle">Select your admin profile and enter your passcode</p>
 		</header>
 
-		<!-- Operator Selection -->
-		<section class="operator-section" class:dimmed={selectedOperator !== null}>
-			<div class="section-header">
-				<span class="material-symbols-rounded">person</span>
-				<h2 class="md-title-medium">Who's working today?</h2>
+		{#if data.adminOperators.length === 0}
+			<div class="empty-state">
+				<span class="material-symbols-rounded icon-lg">shield_person</span>
+				<p class="md-body-medium">No admin operators configured</p>
+				<p class="md-body-small">An operator must be marked as admin in the database to access this panel.</p>
 			</div>
-
-			{#if data.operators.length === 0}
-				<div class="empty-state">
-					<span class="material-symbols-rounded icon-lg">person_off</span>
-					<p class="md-body-medium">No operators configured</p>
-					<a href="/admin/operators" class="md-body-small">Add operators in admin panel</a>
+		{:else}
+			<section class="admin-section" class:dimmed={selectedAdmin !== null}>
+				<div class="section-header">
+					<span class="material-symbols-rounded">person</span>
+					<h2 class="md-title-medium">Select admin</h2>
 				</div>
-			{:else}
-				<div class="operator-grid">
-					{#each data.operators as operator}
+				<div class="admin-grid">
+					{#each data.adminOperators as admin}
 						<button
-							class="operator-card"
-							class:selected={selectedOperator?.id === operator.id}
-							onclick={() => selectOperator(operator)}
-							aria-label="Select operator {operator.name}"
+							class="admin-card"
+							class:selected={selectedAdmin?.id === admin.id}
+							onclick={() => selectAdmin(admin)}
 						>
 							<div class="avatar">
-								<span class="avatar-letter">{operator.name.charAt(0).toUpperCase()}</span>
+								<span class="avatar-letter">{admin.name.charAt(0).toUpperCase()}</span>
 							</div>
-							<span class="operator-name md-label-large">{operator.name}</span>
-							{#if selectedOperator?.id === operator.id}
+							<span class="admin-name md-label-large">{admin.name}</span>
+							{#if selectedAdmin?.id === admin.id}
 								<span class="material-symbols-rounded filled check-icon">check_circle</span>
 							{/if}
 						</button>
 					{/each}
 				</div>
-			{/if}
-		</section>
-
-		<!-- Passcode Entry -->
-		{#if selectedOperator}
-			<section class="passcode-section md-animate-slide-up">
-				<div class="section-header">
-					<span class="material-symbols-rounded">pin</span>
-					<h2 class="md-title-medium">Enter passcode for {selectedOperator.name}</h2>
-				</div>
-
-				<div class="passcode-input-container">
-					<md-outlined-text-field
-						label="4-digit passcode"
-						type="password"
-						maxlength="4"
-						pattern="[0-9]*"
-						inputmode="numeric"
-						value={passcode}
-						oninput={(e: Event) => passcode = (e.target as HTMLInputElement).value}
-						error={!!error}
-						error-text={error}
-						supporting-text="Enter your personal 4-digit code"
-					>
-						<span class="material-symbols-rounded" slot="leading-icon">lock</span>
-					</md-outlined-text-field>
-				</div>
-
-				{#if error}
-					<div class="error-banner">
-						<span class="material-symbols-rounded">error</span>
-						<span class="md-body-medium">{error}</span>
-					</div>
-				{/if}
-
-				<div class="actions">
-					<md-outlined-button onclick={handleBack} disabled={loading}>
-						<span class="material-symbols-rounded" slot="icon">arrow_back</span>
-						Back
-					</md-outlined-button>
-					<md-filled-button onclick={handleLogin} disabled={loading || passcode.length !== 4}>
-						{#if loading}
-							<md-circular-progress indeterminate aria-label="Loading"></md-circular-progress>
-						{:else}
-							<span class="material-symbols-rounded" slot="icon">login</span>
-							Start Shift
-						{/if}
-					</md-filled-button>
-				</div>
 			</section>
+
+			{#if selectedAdmin}
+				<section class="passcode-section">
+					<div class="section-header">
+						<span class="material-symbols-rounded">pin</span>
+						<h2 class="md-title-medium">Enter passcode for {selectedAdmin.name}</h2>
+					</div>
+
+					<div class="passcode-input-container">
+						<md-outlined-text-field
+							label="4-digit passcode"
+							type="password"
+							maxlength="4"
+							pattern="[0-9]*"
+							inputmode="numeric"
+							value={passcode}
+							oninput={(e: Event) => passcode = (e.target as HTMLInputElement).value}
+							error={!!error}
+							error-text={error}
+							supporting-text="Enter your admin passcode"
+						>
+							<span class="material-symbols-rounded" slot="leading-icon">lock</span>
+						</md-outlined-text-field>
+					</div>
+
+					{#if error}
+						<div class="error-banner">
+							<span class="material-symbols-rounded">error</span>
+							<span class="md-body-medium">{error}</span>
+						</div>
+					{/if}
+
+					<div class="actions">
+						<md-text-button onclick={handleBack} disabled={loading}>
+							Back
+						</md-text-button>
+						<md-filled-button onclick={handleLogin} disabled={loading || passcode.length !== 4}>
+							{#if loading}
+								<md-circular-progress indeterminate aria-label="Loading"></md-circular-progress>
+							{:else}
+								<span class="material-symbols-rounded" slot="icon">login</span>
+								Log In
+							{/if}
+						</md-filled-button>
+					</div>
+				</section>
+			{/if}
 		{/if}
 
-		<!-- Footer -->
 		<footer class="login-footer">
-			<a href="/" class="cancel-link">
+			<a href="/login">
 				<md-text-button>
-					<span class="material-symbols-rounded" slot="icon">close</span>
-					Cancel
-				</md-text-button>
-			</a>
-			<a href="/admin/login" class="admin-link">
-				<md-text-button>
-					<span class="material-symbols-rounded" slot="icon">admin_panel_settings</span>
-					Admin Panel
+					<span class="material-symbols-rounded" slot="icon">arrow_back</span>
+					Back to Operator Login
 				</md-text-button>
 			</a>
 		</footer>
@@ -203,7 +182,7 @@
 
 	.login-card {
 		width: 100%;
-		max-width: 560px;
+		max-width: 520px;
 		display: flex;
 		flex-direction: column;
 		gap: var(--md-sys-spacing-lg);
@@ -211,10 +190,8 @@
 		background: var(--md-sys-color-surface);
 		border-radius: var(--md-sys-shape-corner-extra-large);
 		box-shadow: var(--md-sys-elevation-level3);
-		overflow: hidden;
 	}
 
-	/* Header */
 	.login-header {
 		text-align: center;
 		display: flex;
@@ -249,7 +226,6 @@
 		margin: 0;
 	}
 
-	/* Section Header */
 	.section-header {
 		display: flex;
 		align-items: center;
@@ -258,30 +234,25 @@
 		color: var(--md-sys-color-on-surface);
 	}
 
-	.section-header h2 {
-		margin: 0;
-	}
+	.section-header h2 { margin: 0; }
 
 	.section-header .material-symbols-rounded {
 		color: var(--md-sys-color-primary);
 	}
 
-	/* Operator Section */
-	.operator-section {
+	.admin-section {
 		transition: opacity var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
 	}
 
-	.operator-section.dimmed {
-		opacity: 0.6;
-	}
+	.admin-section.dimmed { opacity: 0.6; }
 
-	.operator-grid {
+	.admin-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
 		gap: var(--md-sys-spacing-md);
 	}
 
-	.operator-card {
+	.admin-card {
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -293,20 +264,15 @@
 		border-radius: var(--md-sys-shape-corner-medium);
 		cursor: pointer;
 		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
-		overflow: hidden;
 	}
 
-	.operator-card:hover {
+	.admin-card:hover {
 		background: var(--md-sys-color-surface-container-high);
 		transform: translateY(-2px);
 		box-shadow: var(--md-sys-elevation-level1);
 	}
 
-	.operator-card:active {
-		transform: translateY(0);
-	}
-
-	.operator-card.selected {
+	.admin-card.selected {
 		border-color: var(--md-sys-color-primary);
 		background: var(--md-sys-color-primary-container);
 	}
@@ -320,10 +286,9 @@
 		background: var(--md-sys-color-primary);
 		color: var(--md-sys-color-on-primary);
 		border-radius: var(--md-sys-shape-corner-full);
-		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 	}
 
-	.operator-card.selected .avatar {
+	.admin-card.selected .avatar {
 		background: var(--md-sys-color-on-primary-container);
 		color: var(--md-sys-color-primary-container);
 	}
@@ -333,7 +298,7 @@
 		font-weight: 500;
 	}
 
-	.operator-name {
+	.admin-name {
 		color: var(--md-sys-color-on-surface);
 		text-align: center;
 		overflow: hidden;
@@ -342,7 +307,7 @@
 		max-width: 100%;
 	}
 
-	.operator-card.selected .operator-name {
+	.admin-card.selected .admin-name {
 		color: var(--md-sys-color-on-primary-container);
 	}
 
@@ -354,7 +319,6 @@
 		color: var(--md-sys-color-primary);
 	}
 
-	/* Empty State */
 	.empty-state {
 		display: flex;
 		flex-direction: column;
@@ -370,16 +334,6 @@
 		opacity: 0.5;
 	}
 
-	.empty-state a {
-		color: var(--md-sys-color-primary);
-		text-decoration: none;
-	}
-
-	.empty-state a:hover {
-		text-decoration: underline;
-	}
-
-	/* Passcode Section */
 	.passcode-section {
 		display: flex;
 		flex-direction: column;
@@ -388,16 +342,12 @@
 		border-top: 1px solid var(--md-sys-color-outline-variant);
 	}
 
-	.passcode-input-container {
-		width: 100%;
-	}
+	.passcode-input-container { width: 100%; }
 
 	.passcode-input-container md-outlined-text-field {
 		width: 100%;
-		--md-outlined-text-field-container-shape: var(--md-sys-shape-corner-small);
 	}
 
-	/* Error Banner */
 	.error-banner {
 		display: flex;
 		align-items: center;
@@ -408,11 +358,8 @@
 		border-radius: var(--md-sys-shape-corner-small);
 	}
 
-	.error-banner .material-symbols-rounded {
-		font-size: 20px;
-	}
+	.error-banner .material-symbols-rounded { font-size: 20px; }
 
-	/* Actions */
 	.actions {
 		display: flex;
 		justify-content: flex-end;
@@ -420,48 +367,17 @@
 		margin-top: var(--md-sys-spacing-sm);
 	}
 
-	.actions md-outlined-button,
-	.actions md-filled-button {
-		flex-shrink: 0;
-		white-space: nowrap;
-	}
-
-	.actions md-filled-button {
-		--md-filled-button-container-color: var(--md-sys-color-primary);
-		--md-filled-button-label-text-color: var(--md-sys-color-on-primary);
-	}
-
-	.actions md-outlined-button {
-		--md-outlined-button-outline-color: var(--md-sys-color-outline);
-	}
-
-	.actions md-circular-progress {
-		--md-circular-progress-size: 20px;
-		--md-circular-progress-active-indicator-color: var(--md-sys-color-on-primary);
-	}
-
-	/* Footer */
 	.login-footer {
 		display: flex;
 		justify-content: center;
-		gap: var(--md-sys-spacing-md);
 		padding-top: var(--md-sys-spacing-md);
 		border-top: 1px solid var(--md-sys-color-outline-variant);
 	}
 
-	.cancel-link,
-	.admin-link {
-		text-decoration: none;
-	}
+	.login-footer a { text-decoration: none; }
 
-	/* Responsive */
 	@media (max-width: 480px) {
-		.login-card {
-			padding: var(--md-sys-spacing-lg);
-		}
-
-		.operator-grid {
-			grid-template-columns: repeat(2, 1fr);
-		}
+		.login-card { padding: var(--md-sys-spacing-lg); }
+		.admin-grid { grid-template-columns: repeat(2, 1fr); }
 	}
 </style>

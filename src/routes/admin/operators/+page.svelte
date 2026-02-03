@@ -11,6 +11,7 @@
 
 	let name = $state('');
 	let passcode = $state('');
+	let isAdmin = $state(false);
 	let loading = $state(false);
 	let error = $state('');
 
@@ -25,11 +26,12 @@
 			const res = await fetch('/api/operators', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name, passcode })
+				body: JSON.stringify({ name, passcode, isAdmin })
 			});
 			if (res.ok) {
 				name = '';
 				passcode = '';
+				isAdmin = false;
 				await invalidateAll();
 			} else {
 				const d = await res.json();
@@ -41,13 +43,34 @@
 		loading = false;
 	}
 
-	async function toggleOperator(id: string, isActive: boolean) {
+	async function toggleOperator(id: number, isActive: boolean | null) {
 		loading = true;
 		try {
 			const res = await fetch('/api/operators', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ id, isActive: !isActive })
+			});
+			if (res.ok) {
+				await invalidateAll();
+			} else {
+				const d = await res.json();
+				error = d.error || 'Failed to update operator';
+			}
+		} catch {
+			error = 'Network error';
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function toggleAdmin(id: number, currentIsAdmin: boolean) {
+		loading = true;
+		try {
+			const res = await fetch('/api/operators', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id, isAdmin: !currentIsAdmin })
 			});
 			if (res.ok) {
 				await invalidateAll();
@@ -96,6 +119,15 @@
 				</md-outlined-text-field>
 			</div>
 
+			<label class="admin-checkbox">
+				<md-switch
+					selected={isAdmin}
+					onchange={() => isAdmin = !isAdmin}
+					aria-label="Grant admin access"
+				></md-switch>
+				<span class="md-body-medium">Admin access</span>
+			</label>
+
 			{#if error}
 				<div class="error-message">
 					<span class="material-symbols-rounded">error</span>
@@ -134,12 +166,28 @@
 							<span class="avatar-letter">{op.name.charAt(0).toUpperCase()}</span>
 						</div>
 						<div class="operator-info">
-							<span class="md-title-medium">{op.name}</span>
+							<div class="operator-name-row">
+								<span class="md-title-medium">{op.name}</span>
+								{#if op.isAdmin}
+									<span class="admin-badge">
+										<span class="material-symbols-rounded">shield_person</span>
+										Admin
+									</span>
+								{/if}
+							</div>
 							<span class="status-badge" class:active={op.isActive} class:inactive={!op.isActive}>
 								{op.isActive ? 'Active' : 'Inactive'}
 							</span>
 						</div>
 						<div class="operator-actions">
+							<label class="switch-label">
+								<span class="md-body-small">Admin</span>
+								<md-switch
+									selected={op.isAdmin}
+									onchange={() => toggleAdmin(op.id, op.isAdmin ?? false)}
+									aria-label="Toggle admin access"
+								></md-switch>
+							</label>
 							<label class="switch-label">
 								<span class="md-body-small">{op.isActive ? 'Active' : 'Inactive'}</span>
 								<md-switch
@@ -316,6 +364,40 @@
 	.status-badge.inactive {
 		background: var(--md-sys-color-surface-container-highest);
 		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	/* Admin Checkbox */
+	.admin-checkbox {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+		cursor: pointer;
+	}
+
+	.admin-checkbox .md-body-medium {
+		color: var(--md-sys-color-on-surface);
+	}
+
+	/* Admin Badge */
+	.operator-name-row {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.admin-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		padding: 2px 8px;
+		border-radius: var(--md-sys-shape-corner-full);
+		background: var(--md-sys-color-primary-container);
+		color: var(--md-sys-color-on-primary-container);
+		font: var(--md-sys-typescale-label-small);
+	}
+
+	.admin-badge .material-symbols-rounded {
+		font-size: 14px;
 	}
 
 	/* Switch Label */
