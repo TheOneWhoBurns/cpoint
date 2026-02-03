@@ -13,6 +13,7 @@
 		{ href: '/admin/rental-products', label: 'Rental Products', icon: 'inventory_2' },
 		{ href: '/admin/store-products', label: 'Store Products', icon: 'shopping_bag' },
 		{ href: '/admin/guides', label: 'Guides', icon: 'hiking' },
+		{ href: '/admin/tour-agency', label: 'Tour Agency', icon: 'tour' },
 		{ href: '/admin/inventory', label: 'Inventory', icon: 'warehouse' }
 	];
 
@@ -74,6 +75,8 @@
 						Store Products
 					{:else if $page.url.pathname.includes('/guides')}
 						Guides
+					{:else if $page.url.pathname.includes('/tour-agency')}
+						Tour Agency
 					{:else if $page.url.pathname.includes('/inventory')}
 						Inventory
 					{/if}

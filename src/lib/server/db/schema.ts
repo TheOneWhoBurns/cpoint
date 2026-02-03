@@ -113,6 +113,33 @@ export const storeSales = pgTable('store_sales', {
 	index('idx_store_sales_shift').on(table.shiftId)
 ]);
 
+export const tourAgencyProducts = pgTable('tour_agency_products', {
+	id: serial('id').primaryKey(),
+	name: text('name').notNull(),
+	requiresGuide: boolean('requires_guide').default(false),
+	price: integer('price').notNull(),
+	isActive: boolean('is_active').default(true),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
+export const tourBookings = pgTable('tour_bookings', {
+	id: serial('id').primaryKey(),
+	shiftId: integer('shift_id').references(() => shifts.id),
+	tourProductId: integer('tour_product_id').references(() => tourAgencyProducts.id),
+	guideId: integer('guide_id').references(() => guides.id),
+	pax: integer('pax').notNull(),
+	unitPrice: integer('unit_price').notNull(),
+	totalPrice: integer('total_price').notNull(),
+	cost: integer('cost'),
+	bookedAt: timestamp('booked_at', { withTimezone: true }).notNull(),
+	activityDate: timestamp('activity_date', { withTimezone: true }).notNull(),
+	status: text('status').notNull().default('active'),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => [
+	index('idx_tour_bookings_shift').on(table.shiftId),
+	index('idx_tour_bookings_status').on(table.status)
+]);
+
 export const actionLog = pgTable('action_log', {
 	id: serial('id').primaryKey(),
 	shiftId: integer('shift_id').references(() => shifts.id),
@@ -163,3 +190,7 @@ export type StoreSale = typeof storeSales.$inferSelect;
 export type NewStoreSale = typeof storeSales.$inferInsert;
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
+export type TourAgencyProduct = typeof tourAgencyProducts.$inferSelect;
+export type NewTourAgencyProduct = typeof tourAgencyProducts.$inferInsert;
+export type TourBooking = typeof tourBookings.$inferSelect;
+export type NewTourBooking = typeof tourBookings.$inferInsert;
