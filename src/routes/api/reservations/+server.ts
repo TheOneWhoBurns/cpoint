@@ -152,6 +152,13 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			updates.reservedUntil = new Date(reservedUntil);
 		}
 
+		// Validate date range if either date is being updated
+		const finalFrom = updates.reservedFrom ?? reservation.reservedFrom;
+		const finalUntil = updates.reservedUntil ?? reservation.reservedUntil;
+		if (finalFrom && finalUntil && new Date(finalUntil) <= new Date(finalFrom)) {
+			return json({ error: 'End time must be after start time' }, { status: 400 });
+		}
+
 		if (Object.keys(updates).length === 0) {
 			return json({ error: 'No valid updates provided' }, { status: 400 });
 		}
