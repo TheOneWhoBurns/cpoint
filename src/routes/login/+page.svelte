@@ -328,7 +328,8 @@
 	}
 
 	.operator-card:active {
-		transform: translateY(0);
+		transform: scale(0.95);
+		box-shadow: none;
 	}
 
 	.operator-card.selected {

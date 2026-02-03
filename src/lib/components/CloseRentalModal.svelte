@@ -536,6 +536,7 @@
 		max-width: 550px;
 		width: 100%;
 		max-height: 90vh;
+		max-height: 90dvh;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -1118,6 +1119,18 @@
 
 		.payment-inputs {
 			flex-direction: column;
+		}
+
+		.modal-content {
+			max-height: 95vh;
+			max-height: 95dvh;
+			border-radius: var(--md-sys-shape-corner-large) var(--md-sys-shape-corner-large) 0 0;
+			margin-top: auto;
+		}
+
+		.modal-overlay {
+			align-items: flex-end;
+			padding: 0;
 		}
 	}
 </style>

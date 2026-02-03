@@ -16,6 +16,7 @@
 	import CloseRentalModal from '$lib/components/CloseRentalModal.svelte';
 	import EditRentalModal from '$lib/components/EditRentalModal.svelte';
 	import GuideSelector from '$lib/components/GuideSelector.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 	import flatpickr from 'flatpickr';
 	import 'flatpickr/dist/flatpickr.min.css';
 
@@ -84,6 +85,36 @@
 	let reservationUntilInput = $state<HTMLInputElement | null>(null);
 	let reservationFromPicker: flatpickr.Instance | null = null;
 	let reservationUntilPicker: flatpickr.Instance | null = null;
+
+	// Toast notifications
+	let toastVisible = $state(false);
+	let toastMessage = $state('');
+	let toastVariant = $state<'success' | 'error' | 'warning' | 'info'>('success');
+
+	function showToast(message: string, variant: 'success' | 'error' | 'warning' | 'info' = 'success') {
+		toastMessage = message;
+		toastVariant = variant;
+		toastVisible = true;
+	}
+
+	// Live elapsed time ticker - updates every 30 seconds
+	let now = $state(Date.now());
+	$effect(() => {
+		const interval = setInterval(() => { now = Date.now(); }, 30_000);
+		return () => clearInterval(interval);
+	});
+
+	// Escape key handler for modals
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key !== 'Escape') return;
+		if (showConflictModal) { showConflictModal = false; return; }
+		if (showCloseTourModal) { showCloseTourModal = false; return; }
+		if (showTourBookingModal) { closeTourBookingModal(); return; }
+		if (showStoreSaleModal) { showStoreSaleModal = false; return; }
+		if (showShiftSummary) { showShiftSummary = false; return; }
+		if (showReservationModal) { closeReservationModal(); return; }
+		if (showForm) { resetForm(); return; }
+	}
 
 	// Theme
 	let currentTheme = $state<Theme>('system');
@@ -389,6 +420,7 @@
 		if (res.ok) {
 			closeTourBookingModal();
 			await invalidateAll();
+			showToast('Tour booking created');
 		} else {
 			const d = await res.json();
 			tourError = d.error || 'Failed to create booking';
@@ -427,6 +459,7 @@
 			showCloseTourModal = false;
 			selectedTourBookingToClose = null;
 			await invalidateAll();
+			showToast('Tour booking closed');
 		} else {
 			const d = await res.json();
 			tourCloseError = d.error || 'Failed to close booking';
@@ -696,6 +729,7 @@
 			fromReservationId = null;
 			resetForm();
 			await invalidateAll();
+			showToast('Rental created successfully');
 		} else if (res.status === 409) {
 			const d = await res.json();
 			if (d.error === 'reservation_conflict') {
@@ -818,6 +852,7 @@
 			selectedStoreProductId = null;
 			saleQuantity = 1;
 			await invalidateAll();
+			showToast('Store sale completed');
 		} else {
 			const d = await res.json();
 			saleError = d.error || 'Failed to create sale';
@@ -838,21 +873,28 @@
 				currentShiftId: $shiftStore.shift?.id
 			})
 		});
-		if (res.ok) await invalidateAll();
+		if (res.ok) {
+			await invalidateAll();
+			showToast('Rental closed successfully');
+		}
 		loading = false;
 		selectedRentalToClose = null;
 	}
 
 	function getElapsedTime(startedAt: string | Date): string {
 		const start = new Date(startedAt);
-		const now = new Date();
-		const diff = Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
+		// Uses reactive `now` ticker to auto-update elapsed time
+		const diff = Math.floor((now - start.getTime()) / 1000 / 60);
 		const hours = Math.floor(diff / 60);
 		const mins = diff % 60;
 		if (hours > 0) return `${hours}h ${mins}m`;
 		return `${mins}m`;
 	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
+
+<Toast bind:visible={toastVisible} message={toastMessage} variant={toastVariant} />
 
 {#if $shiftStore.isLoggedIn}
 	<div class="app-shell">
@@ -1211,7 +1253,7 @@
 		<!-- Create Rental Modal -->
 		{#if showForm}
 			<div class="modal-overlay" onclick={resetForm}>
-				<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+				<div class="modal-content large" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 					<div class="modal-header">
 						<div class="modal-title">
 							<span class="material-symbols-rounded">{fromReservationId ? 'event' : 'add_shopping_cart'}</span>
@@ -1469,7 +1511,7 @@
 <!-- Close Shift Modal -->
 {#if showShiftSummary && shiftSummary}
 	<div class="modal-overlay" onclick={() => { showShiftSummary = false; }}>
-		<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content large" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">fact_check</span>
@@ -1634,7 +1676,7 @@
 <!-- Store Sale Modal -->
 {#if showStoreSaleModal}
 	<div class="modal-overlay" onclick={() => { showStoreSaleModal = false; }}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">shopping_cart</span>
@@ -1699,7 +1741,7 @@
 <!-- Tour Booking Modal -->
 {#if showTourBookingModal}
 	<div class="modal-overlay" onclick={closeTourBookingModal}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">tour</span>
@@ -1795,7 +1837,7 @@
 <!-- Close Tour Booking Modal -->
 {#if showCloseTourModal && selectedTourBookingToClose}
 	<div class="modal-overlay" onclick={() => { showCloseTourModal = false; }}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">check_circle</span>
@@ -1915,7 +1957,7 @@
 <!-- Reservation Conflict Override Modal -->
 {#if showConflictModal}
 	<div class="modal-overlay" onclick={() => { showConflictModal = false; }} style="z-index: 300;">
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
@@ -1994,7 +2036,7 @@
 <!-- Create Reservation Modal -->
 {#if showReservationModal}
 	<div class="modal-overlay" onclick={closeReservationModal}>
-		<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content large" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">event</span>
@@ -2694,6 +2736,7 @@
 		max-width: 500px;
 		width: 100%;
 		max-height: 90vh;
+		max-height: 90dvh;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -3224,13 +3267,13 @@
 	}
 
 	.cash-match {
-		background: #e8f5e9;
-		color: #2e7d32;
+		background: var(--md-sys-color-success-container);
+		color: var(--md-sys-color-on-success-container);
 	}
 
 	.cash-over {
-		background: #fff3e0;
-		color: #e65100;
+		background: var(--md-sys-color-warning-container);
+		color: var(--md-sys-color-on-warning-container);
 	}
 
 	.cash-short {
@@ -3461,8 +3504,18 @@
 			flex-direction: column;
 		}
 
+		.modal-content,
 		.modal-content.large {
 			max-width: 100%;
+			max-height: 95vh;
+			max-height: 95dvh;
+			border-radius: var(--md-sys-shape-corner-large) var(--md-sys-shape-corner-large) 0 0;
+			margin-top: auto;
+		}
+
+		.modal-overlay {
+			align-items: flex-end;
+			padding: 0;
 		}
 
 		.reservation-dates-inputs {
