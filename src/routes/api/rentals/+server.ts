@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { rentals, trackedItems, productTypes, rentalProducts, guides, payments, reservations, operators } from '$lib/server/db/schema';
 import { eq, desc } from 'drizzle-orm';
+import { verifyPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 interface ReservationItem {
@@ -125,12 +126,20 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			if (conflicts.length > 0) {
 				// If override requested, verify passcode
 				if (overrideReservationIds && operatorPasscode) {
-					const [operator] = await db
+					const allOperators = await db
 						.select()
 						.from(operators)
-						.where(eq(operators.passcode, operatorPasscode));
+						.where(eq(operators.isActive, true));
 
-					if (!operator) {
+					let overrideValid = false;
+					for (const op of allOperators) {
+						if (await verifyPasscode(operatorPasscode, op.passcode)) {
+							overrideValid = true;
+							break;
+						}
+					}
+
+					if (!overrideValid) {
 						return json({ error: 'Invalid passcode for reservation override' }, { status: 403 });
 					}
 					// Passcode valid, continue with rental creation

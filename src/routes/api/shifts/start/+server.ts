@@ -2,10 +2,20 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators, shifts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { verifyPasscode } from '$lib/server/auth';
+import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure } from '$lib/server/auth';
+import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
+	const clientIp = getClientAddress();
+	const rateCheck = checkRateLimit(`shift-start:${clientIp}`);
+	if (!rateCheck.allowed) {
+		return json(
+			{ error: 'Too many login attempts. Try again later.' },
+			{ status: 429, headers: { 'Retry-After': String(rateCheck.retryAfterSeconds) } }
+		);
+	}
+
 	const { operatorId, passcode } = await request.json();
 
 	if (!operatorId || !passcode) {
@@ -18,13 +28,17 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true)));
 
 	if (!operator) {
-		return json({ error: 'Operator not found' }, { status: 404 });
+		logAuthFailure('/api/shifts/start', String(operatorId), clientIp);
+		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
 	const valid = await verifyPasscode(passcode, operator.passcode);
 	if (!valid) {
-		return json({ error: 'Invalid passcode' }, { status: 401 });
+		logAuthFailure('/api/shifts/start', String(operatorId), clientIp);
+		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
+
+	clearRateLimit(`shift-start:${clientIp}`);
 
 	const [existingShift] = await db
 		.select()
@@ -46,6 +60,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
+		secure: !dev,
 		maxAge: 60 * 60 * 24
 	});
 

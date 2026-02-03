@@ -22,7 +22,13 @@ export async function verifyPasscode(passcode: string, stored: string): Promise<
 	if (stored.startsWith('$2a$') || stored.startsWith('$2b$')) {
 		return bcrypt.compare(passcode, stored);
 	}
-	return passcode === stored;
+	// Reject plaintext-stored passcodes — they must be rehashed
+	console.warn('[SECURITY] Rejected login attempt against unhashed passcode. Passcode must be rehashed.');
+	return false;
+}
+
+export function logAuthFailure(endpoint: string, identifier: string, ip: string): void {
+	console.warn(`[AUTH_FAILURE] endpoint=${endpoint} identifier=${identifier} ip=${ip} time=${new Date().toISOString()}`);
 }
 
 export function generateSessionToken(): string {

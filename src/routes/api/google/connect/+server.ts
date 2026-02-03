@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import crypto from 'node:crypto';
 import { getAuthUrl } from '$lib/server/google-sheets';
+import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ cookies }) => {
@@ -14,6 +15,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
+		secure: !dev,
 		maxAge: 600
 	});
 
