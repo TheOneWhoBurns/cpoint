@@ -161,5 +161,14 @@ export type StoreProduct = typeof storeProducts.$inferSelect;
 export type NewStoreProduct = typeof storeProducts.$inferInsert;
 export type StoreSale = typeof storeSales.$inferSelect;
 export type NewStoreSale = typeof storeSales.$inferInsert;
+export const appSettings = pgTable('app_settings', {
+	id: serial('id').primaryKey(),
+	key: text('key').unique().notNull(),
+	value: jsonb('value'),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
+});
+
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
+export type AppSetting = typeof appSettings.$inferSelect;
+export type NewAppSetting = typeof appSettings.$inferInsert;

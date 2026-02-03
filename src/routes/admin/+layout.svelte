@@ -13,7 +13,8 @@
 		{ href: '/admin/rental-products', label: 'Rental Products', icon: 'inventory_2' },
 		{ href: '/admin/store-products', label: 'Store Products', icon: 'shopping_bag' },
 		{ href: '/admin/guides', label: 'Guides', icon: 'hiking' },
-		{ href: '/admin/inventory', label: 'Inventory', icon: 'warehouse' }
+		{ href: '/admin/inventory', label: 'Inventory', icon: 'warehouse' },
+		{ href: '/admin/settings', label: 'Settings', icon: 'settings' }
 	];
 
 	function isActive(href: string, currentPath: string): boolean {
@@ -76,6 +77,8 @@
 						Guides
 					{:else if $page.url.pathname.includes('/inventory')}
 						Inventory
+					{:else if $page.url.pathname.includes('/settings')}
+						Settings
 					{/if}
 				</h1>
 			</div>

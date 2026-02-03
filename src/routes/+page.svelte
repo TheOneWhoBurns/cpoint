@@ -65,13 +65,21 @@
 		try {
 			const res = await fetch('/api/shifts/close', { method: 'POST' });
 			if (res.ok) {
-				const blob = await res.blob();
-				const url = window.URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				a.download = `shift-report-${new Date().toISOString().split('T')[0]}.xlsx`;
-				a.click();
-				window.URL.revokeObjectURL(url);
+				const contentType = res.headers.get('Content-Type') || '';
+				if (contentType.includes('application/json')) {
+					// Google Sheets response
+					const { url } = await res.json();
+					window.open(url, '_blank');
+				} else {
+					// Excel file download fallback
+					const blob = await res.blob();
+					const url = window.URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = `shift-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+					a.click();
+					window.URL.revokeObjectURL(url);
+				}
 				shiftStore.clearSession();
 				await invalidateAll();
 			} else {
@@ -846,8 +854,8 @@
 			<div class="modal-footer">
 				<md-outlined-button onclick={() => { showShiftSummary = false; }}>Cancel</md-outlined-button>
 				<md-filled-button class="danger-btn" onclick={() => { showShiftSummary = false; executeEndShift(); }}>
-					<span class="material-symbols-rounded" slot="icon">download</span>
-					End Shift & Download Report
+					<span class="material-symbols-rounded" slot="icon">assignment</span>
+					End Shift & Export Report
 				</md-filled-button>
 			</div>
 		</div>
