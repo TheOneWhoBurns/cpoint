@@ -157,7 +157,6 @@
 					value={productCategory}
 					oninput={(e: Event) => productCategory = (e.target as HTMLInputElement).value}
 					disabled={loading}
-					supporting-text="Optional - for organizing products"
 				>
 					<span class="material-symbols-rounded" slot="leading-icon">category</span>
 				</md-outlined-text-field>
