@@ -11,6 +11,11 @@
 	let success = $state('');
 	let shareEmail = $state(data.shareEmail);
 	let savingEmail = $state(false);
+	let clientId = $state(data.savedCredentials?.clientId || '');
+	let clientSecret = $state('');
+	let origin = $state(data.savedCredentials?.origin || '');
+	let savingCreds = $state(false);
+	let showCredentialsForm = $state(!data.googleConfigured);
 
 	// Check URL params for feedback from OAuth callback
 	$effect(() => {
@@ -53,6 +58,51 @@
 			error = 'Failed to disconnect.';
 		}
 		disconnecting = false;
+	}
+
+	async function handleSaveCredentials() {
+		savingCreds = true;
+		error = '';
+		success = '';
+		try {
+			const trimmedClientId = clientId.trim();
+			const trimmedOrigin = origin.trim();
+			if (!trimmedClientId) {
+				error = 'Client ID is required.';
+				savingCreds = false;
+				return;
+			}
+			if (!trimmedOrigin) {
+				error = 'Origin URL is required.';
+				savingCreds = false;
+				return;
+			}
+			const body: Record<string, string> = { clientId: trimmedClientId, origin: trimmedOrigin };
+			if (clientSecret.trim()) {
+				body.clientSecret = clientSecret.trim();
+			} else if (!data.savedCredentials?.hasSecret) {
+				error = 'Client Secret is required.';
+				savingCreds = false;
+				return;
+			}
+			const res = await fetch('/api/google/credentials', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (res.ok) {
+				success = 'Google OAuth credentials saved.';
+				clientSecret = '';
+				await invalidateAll();
+				showCredentialsForm = false;
+			} else {
+				const data = await res.json();
+				error = data.error || 'Failed to save credentials.';
+			}
+		} catch {
+			error = 'Failed to save credentials.';
+		}
+		savingCreds = false;
 	}
 
 	async function handleSaveEmail() {
@@ -101,12 +151,69 @@
 			</div>
 		{/if}
 
-		{#if !data.googleConfigured}
+		{#if !data.googleConfigured && !showCredentialsForm}
 			<div class="alert alert-error">
 				<span class="material-symbols-rounded">warning</span>
 				<span class="md-body-medium">
-					Google OAuth credentials not configured. Set <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, and <code>ORIGIN</code> environment variables to enable this feature.
+					Google OAuth credentials not configured. Add your credentials below to enable this feature.
 				</span>
+			</div>
+		{/if}
+
+		{#if showCredentialsForm}
+			<div class="credentials-card">
+				<h4 class="md-title-small credentials-title">
+					<span class="material-symbols-rounded">key</span>
+					Google OAuth Credentials
+				</h4>
+				<p class="md-body-small credentials-desc">
+					Enter your Google Cloud OAuth 2.0 credentials. These are stored securely in the database.
+				</p>
+				<div class="credentials-form">
+					<md-outlined-text-field
+						label="Client ID"
+						value={clientId}
+						oninput={(e: Event) => { clientId = (e.target as HTMLInputElement).value; }}
+						style="width: 100%;"
+					></md-outlined-text-field>
+					<md-outlined-text-field
+						label={data.savedCredentials?.hasSecret ? 'Client Secret (leave blank to keep current)' : 'Client Secret'}
+						type="password"
+						value={clientSecret}
+						oninput={(e: Event) => { clientSecret = (e.target as HTMLInputElement).value; }}
+						style="width: 100%;"
+					></md-outlined-text-field>
+					<md-outlined-text-field
+						label="Origin URL (e.g. https://yourdomain.com)"
+						value={origin}
+						oninput={(e: Event) => { origin = (e.target as HTMLInputElement).value; }}
+						supporting-text="The base URL of this app, used for the OAuth callback."
+						style="width: 100%;"
+					></md-outlined-text-field>
+					<div class="credentials-actions">
+						<md-filled-button
+							disabled={savingCreds || !clientId.trim() || !origin.trim()}
+							onclick={handleSaveCredentials}
+						>
+							<span class="material-symbols-rounded" slot="icon">save</span>
+							{savingCreds ? 'Saving...' : 'Save Credentials'}
+						</md-filled-button>
+						{#if data.googleConfigured}
+							<md-outlined-button onclick={() => { showCredentialsForm = false; }}>
+								Cancel
+							</md-outlined-button>
+						{/if}
+					</div>
+				</div>
+			</div>
+		{:else if data.googleConfigured}
+			<div class="credentials-configured">
+				<span class="material-symbols-rounded configured-icon">check_circle</span>
+				<span class="md-body-medium">OAuth credentials configured</span>
+				<md-outlined-button onclick={() => { showCredentialsForm = true; }}>
+					<span class="material-symbols-rounded" slot="icon">edit</span>
+					Edit Credentials
+				</md-outlined-button>
 			</div>
 		{/if}
 
@@ -376,6 +483,54 @@
 		color: var(--md-sys-color-on-surface-variant);
 	}
 
+	.credentials-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-xl);
+		background: var(--md-sys-color-surface);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-large);
+	}
+
+	.credentials-title {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		margin: 0;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.credentials-desc {
+		margin: 0;
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.credentials-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.credentials-actions {
+		display: flex;
+		gap: var(--md-sys-spacing-md);
+		flex-wrap: wrap;
+	}
+
+	.credentials-configured {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-md) var(--md-sys-spacing-lg);
+		background: var(--md-sys-color-surface-container);
+		border-radius: var(--md-sys-shape-corner-medium);
+	}
+
+	.configured-icon {
+		color: var(--md-sys-color-on-success-container, #065f46);
+	}
+
 	@media (max-width: 768px) {
 		.connection-card {
 			padding: var(--md-sys-spacing-lg);
@@ -389,6 +544,10 @@
 		.share-form {
 			flex-direction: column;
 			align-items: stretch;
+		}
+
+		.credentials-card {
+			padding: var(--md-sys-spacing-lg);
 		}
 	}
 </style>

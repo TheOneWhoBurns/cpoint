@@ -1,12 +1,12 @@
 import { redirect } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
 import crypto from 'node:crypto';
-import { getAuthUrl } from '$lib/server/google-sheets';
+import { getAuthUrl, getGoogleCredentials } from '$lib/server/google-sheets';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ cookies }) => {
-	if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+	const creds = await getGoogleCredentials();
+	if (!creds) {
 		redirect(302, '/admin/settings?error=not_configured');
 	}
 
@@ -19,6 +19,6 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		maxAge: 600
 	});
 
-	const url = getAuthUrl(state);
+	const url = await getAuthUrl(state);
 	redirect(302, url);
 };

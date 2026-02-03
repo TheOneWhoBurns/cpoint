@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { rentals, trackedItems, productTypes, rentalProducts, guides, payments, reservations, operators } from '$lib/server/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import { verifyPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
@@ -35,7 +35,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: `Too many items (max ${MAX_ITEMS_PER_RENTAL})` }, { status: 400 });
 	}
 
-	// Validate item structure
 	for (const item of items) {
 		if (!item.type || !['tracked', 'generic'].includes(item.type)) {
 			return json({ error: 'Each item must have a valid type' }, { status: 400 });
@@ -93,7 +92,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 	}
 
-	// Check for reservation conflicts (unless fulfilling from a reservation or overriding)
 	if (!fromReservationId) {
 		const rentalTrackedIds = items
 			.filter((i: ReservationItem) => i.type === 'tracked' && i.itemId)
@@ -113,7 +111,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				const resFrom = new Date(res.reservedFrom);
 				const resUntil = new Date(res.reservedUntil);
 
-				// A rental starting now conflicts if the reservation window overlaps with now
 				if (now < resUntil && resFrom <= resUntil) {
 					const resTrackedIds = resItems
 						.filter(i => i.type === 'tracked' && i.itemId)
@@ -121,7 +118,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 					const overlappingIds = rentalTrackedIds.filter((id: number) => resTrackedIds.includes(id));
 					if (overlappingIds.length > 0) {
-						// Check if this reservation is being overridden
 						if (!overrideReservationIds || !overrideReservationIds.includes(res.id)) {
 							conflicts.push({
 								id: res.id,
@@ -137,7 +133,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			}
 
 			if (conflicts.length > 0) {
-				// If override requested, verify passcode
 				if (overrideReservationIds && operatorPasscode) {
 					let overrideValid = false;
 
@@ -165,7 +160,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 					if (!overrideValid) {
 						return json({ error: 'Invalid passcode for reservation override' }, { status: 403 });
 					}
-					// Passcode valid, continue with rental creation
 				} else {
 					return json({
 						error: 'reservation_conflict',
@@ -176,9 +170,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 	}
 
-	// Run inventory check + claim + rental insert inside a transaction
+	const productPricing = product.pricing as { hourly?: number; fullDay?: number };
+
 	const result = await db.transaction(async (tx) => {
-		// Validate and claim inventory atomically
 		for (const item of items) {
 			if (item.type === 'tracked') {
 				const [tracked] = await tx.select().from(trackedItems).where(eq(trackedItems.id, item.itemId));
@@ -199,14 +193,12 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				}
 				await tx
 					.update(productTypes)
-					.set({ availableQuantity: (cat.availableQuantity ?? 0) - (item.quantity || 1) })
+					.set({ availableQuantity: sql`${productTypes.availableQuantity} - ${item.quantity || 1}` })
 					.where(eq(productTypes.id, item.categoryId));
 			}
 		}
 
-		const productPricing = product.pricing as { hourly?: number; fullDay?: number };
-
-		const [created] = await tx
+		const [rental] = await tx
 			.insert(rentals)
 			.values({
 				shiftId,
@@ -223,25 +215,24 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			})
 			.returning();
 
-		return { created };
+		if (fromReservationId) {
+			await tx
+				.update(reservations)
+				.set({
+					status: 'fulfilled',
+					fulfilledByRentalId: rental.id
+				})
+				.where(eq(reservations.id, fromReservationId));
+		}
+
+		return { rental };
 	});
 
 	if ('error' in result) {
 		return json({ error: result.error }, { status: result.status });
 	}
 
-	// If fulfilling from a reservation, mark it as fulfilled (outside transaction is fine)
-	if (fromReservationId) {
-		await db
-			.update(reservations)
-			.set({
-				status: 'fulfilled',
-				fulfilledByRentalId: result.created.id
-			})
-			.where(eq(reservations.id, fromReservationId));
-	}
-
-	return json(result.created, { status: 201 });
+	return json(result.rental, { status: 201 });
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
@@ -262,7 +253,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json({ error: 'Cannot edit a closed rental' }, { status: 400 });
 		}
 
-		// Store original values if not already stored
 		const currentPricing = rental.pricing as {type: string, hourly?: number, fullDay?: number, originalValues?: object};
 		const originalValues = currentPricing.originalValues || {
 			customer: rental.customer,
@@ -272,14 +262,12 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			editedAt: null
 		};
 
-		// Build update object
 		const updates: Record<string, unknown> = {};
 
 		if (customer !== undefined) {
 			updates.customer = customer;
 		}
 
-		// Handle item changes - release old items, claim new items
 		if (newItems !== undefined && Array.isArray(newItems)) {
 			if (newItems.length > MAX_ITEMS_PER_RENTAL) {
 				return json({ error: `Too many items (max ${MAX_ITEMS_PER_RENTAL})` }, { status: 400 });
@@ -344,12 +332,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 					const newQty = newGenericMap.get(catId) || 0;
 					const diff = newQty - oldQty;
 					if (diff !== 0) {
-						const [cat] = await tx.select().from(productTypes).where(eq(productTypes.id, catId));
-						if (cat) {
-							await tx.update(productTypes)
-								.set({ availableQuantity: (cat.availableQuantity ?? 0) - diff })
-								.where(eq(productTypes.id, catId));
-						}
+						await tx.update(productTypes)
+							.set({ availableQuantity: sql`${productTypes.availableQuantity} - ${diff}` })
+							.where(eq(productTypes.id, catId));
 					}
 				}
 
@@ -363,7 +348,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			updates.items = newItems;
 		}
 
-		// Handle guide change
 		if (newGuideId !== undefined) {
 			if (newGuideId !== null) {
 				const [guide] = await db.select().from(guides).where(eq(guides.id, newGuideId));
@@ -384,7 +368,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 				}
 			};
 		} else if (Object.keys(updates).length > 0) {
-			// If any update but no pricing change, still track original values
 			updates.pricing = {
 				...currentPricing,
 				originalValues: {
@@ -424,8 +407,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const rentalItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
 		const pricing = rental.pricing as {type: string, hourly?: number, fullDay?: number};
 
-		// Calculate price based on rental type and elapsed time
-		// Charges in half-hour increments (minimum 1 half-hour), rounded to whole dollars
 		let calculatedPrice = 0;
 		if (pricing.type === 'fullDay') {
 			calculatedPrice = Math.round(pricing.fullDay || 0);
@@ -452,46 +433,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json({ error: 'Payment amounts do not match final price' }, { status: 400 });
 		}
 
-		for (const item of rentalItems) {
-			if (item.type === 'tracked' && item.itemId) {
-				await db
-					.update(trackedItems)
-					.set({ status: 'available' })
-					.where(eq(trackedItems.id, item.itemId));
-			} else if (item.type === 'generic' && item.categoryId) {
-				const [cat] = await db
-					.select()
-					.from(productTypes)
-					.where(eq(productTypes.id, item.categoryId));
-				if (cat) {
-					const newAvailable = (cat.availableQuantity ?? 0) + (item.quantity || 1);
-					await db
-						.update(productTypes)
-						.set({ availableQuantity: newAvailable })
-						.where(eq(productTypes.id, item.categoryId));
-				}
-			}
-		}
-
-		// Insert payment records for cash and credit separately if amounts > 0
-		if (cashAmount > 0) {
-			await db.insert(payments).values({
-				shiftId: currentShiftId,
-				rentalId: id,
-				amount: Math.round(cashAmount * 100), // Convert to cents
-				method: 'cash'
-			});
-		}
-		if (creditAmount > 0) {
-			await db.insert(payments).values({
-				shiftId: currentShiftId,
-				rentalId: id,
-				amount: Math.round(creditAmount * 100), // Convert to cents
-				method: 'credit'
-			});
-		}
-
-		// Build updated pricing object with all payment details
 		const updatedPricing = {
 			...pricing,
 			calculatedPrice,
@@ -504,16 +445,51 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			paymentMethod: cashAmount > 0 && creditAmount > 0 ? 'split' : (creditAmount > 0 ? 'credit' : 'cash')
 		};
 
-		const [updated] = await db
-			.update(rentals)
-			.set({
-				status: 'completed',
-				returnedAt: new Date(),
-				returnNotes: returnData ? JSON.stringify(returnData) : null,
-				pricing: updatedPricing
-			})
-			.where(eq(rentals.id, id))
-			.returning();
+		const updated = await db.transaction(async (tx) => {
+			for (const item of rentalItems) {
+				if (item.type === 'tracked' && item.itemId) {
+					await tx
+						.update(trackedItems)
+						.set({ status: 'available' })
+						.where(eq(trackedItems.id, item.itemId));
+				} else if (item.type === 'generic' && item.categoryId) {
+					await tx
+						.update(productTypes)
+						.set({ availableQuantity: sql`${productTypes.availableQuantity} + ${item.quantity || 1}` })
+						.where(eq(productTypes.id, item.categoryId));
+				}
+			}
+
+			if (cashAmount > 0) {
+				await tx.insert(payments).values({
+					shiftId: currentShiftId,
+					rentalId: id,
+					amount: Math.round(cashAmount * 100),
+					method: 'cash'
+				});
+			}
+			if (creditAmount > 0) {
+				await tx.insert(payments).values({
+					shiftId: currentShiftId,
+					rentalId: id,
+					amount: Math.round(creditAmount * 100),
+					method: 'credit'
+				});
+			}
+
+			const [result] = await tx
+				.update(rentals)
+				.set({
+					status: 'completed',
+					returnedAt: new Date(),
+					returnNotes: returnData ? JSON.stringify(returnData) : null,
+					pricing: updatedPricing
+				})
+				.where(eq(rentals.id, id))
+				.returning();
+
+			return result;
+		});
 
 		return json(updated);
 	}

@@ -12,6 +12,7 @@
 	let productName = $state('');
 	let productCategory = $state('');
 	let productPrice = $state('');
+	let productCost = $state('');
 	let productQuantity = $state('1');
 	let loading = $state(false);
 	let error = $state('');
@@ -31,6 +32,12 @@
 			return;
 		}
 
+		const cost = productCost ? parseFloat(productCost) : null;
+		if (cost !== null && cost < 0) {
+			error = 'Cost must be valid';
+			return;
+		}
+
 		const qty = parseInt(productQuantity) || 0;
 		if (qty < 0) {
 			error = 'Quantity must be valid';
@@ -47,6 +54,7 @@
 				name: productName,
 				category: productCategory || null,
 				price,
+				cost,
 				quantity: qty
 			})
 		});
@@ -55,6 +63,7 @@
 			productName = '';
 			productCategory = '';
 			productPrice = '';
+			productCost = '';
 			productQuantity = '1';
 			await invalidateAll();
 		} else {
@@ -176,6 +185,21 @@
 				</md-outlined-text-field>
 
 				<md-outlined-text-field
+					label="Consignment Cost"
+					type="number"
+					step="0.01"
+					min="0"
+					placeholder="0.00"
+					value={productCost}
+					oninput={(e: Event) => productCost = (e.target as HTMLInputElement).value}
+					disabled={loading}
+					prefix-text="$"
+					supporting-text="Optional — cost paid to consignment supplier"
+				>
+					<span class="material-symbols-rounded" slot="leading-icon">storefront</span>
+				</md-outlined-text-field>
+
+				<md-outlined-text-field
 					label="Initial Quantity"
 					type="number"
 					min="0"
@@ -225,6 +249,7 @@
 							<th>Product</th>
 							<th>Category</th>
 							<th>Price</th>
+							<th>Cost</th>
 							<th>Quantity</th>
 							<th>Status</th>
 							<th>Actions</th>
@@ -248,6 +273,13 @@
 								</td>
 								<td>
 									<span class="price-value">${(product.price / 100).toFixed(2)}</span>
+								</td>
+								<td>
+									{#if product.cost != null}
+										<span class="cost-value">${(product.cost / 100).toFixed(2)}</span>
+									{:else}
+										<span class="md-body-small no-category">—</span>
+									{/if}
 								</td>
 								<td>
 									<div class="quantity-control">
@@ -457,6 +489,12 @@
 	.price-value {
 		font: var(--md-sys-typescale-title-medium);
 		color: var(--md-sys-color-primary);
+	}
+
+	/* Cost Value */
+	.cost-value {
+		font: var(--md-sys-typescale-body-medium);
+		color: var(--md-sys-color-on-surface-variant);
 	}
 
 	/* Quantity Control */
