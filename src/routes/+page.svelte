@@ -15,6 +15,8 @@
 	import CloseRentalModal from '$lib/components/CloseRentalModal.svelte';
 	import EditRentalModal from '$lib/components/EditRentalModal.svelte';
 	import GuideSelector from '$lib/components/GuideSelector.svelte';
+	import flatpickr from 'flatpickr';
+	import 'flatpickr/dist/flatpickr.min.css';
 
 	let { data } = $props();
 
@@ -30,6 +32,9 @@
 		rentalsCredit: number,
 		storeSalesCount: number,
 		storeSalesTotal: number,
+		tourBookingsCount: number,
+		tourRevenue: number,
+		tourCost: number,
 		totalCash: number,
 		totalCredit: number
 	} | null>(null);
@@ -37,6 +42,157 @@
 	let selectedStoreProductId = $state<number | null>(null);
 	let saleQuantity = $state(1);
 	let saleError = $state('');
+
+	// Tour booking state
+	let showTourBookingModal = $state(false);
+	let selectedTourProductId = $state<number | null>(null);
+	let tourPax = $state(1);
+	let tourActivityDate = $state('');
+	let tourSelectedGuideId = $state<number | null>(null);
+	let tourError = $state('');
+	let showCloseTourModal = $state(false);
+	let selectedTourBookingToClose = $state<any>(null);
+	let tourCloseCost = $state('');
+	let tourCloseError = $state('');
+	let confirmDeleteTourBooking = $state(false);
+	let pendingDeleteTourBookingId = $state<number | null>(null);
+
+	let activityDateInput = $state<HTMLInputElement | null>(null);
+	let activityDatePicker: flatpickr.Instance | null = null;
+
+	const selectedTourProduct = $derived(selectedTourProductId ? data.tourProducts.find(p => p.id === selectedTourProductId) : null);
+
+	function initFlatpickr() {
+		if (activityDateInput && !activityDatePicker) {
+			activityDatePicker = flatpickr(activityDateInput, {
+				dateFormat: 'Y-m-d',
+				onChange: (dates) => {
+					if (dates[0]) tourActivityDate = dates[0].toISOString();
+				}
+			});
+		}
+	}
+
+	function destroyFlatpickr() {
+		activityDatePicker?.destroy();
+		activityDatePicker = null;
+	}
+
+	function openTourBookingModal() {
+		showTourBookingModal = true;
+		tourError = '';
+		selectedTourProductId = null;
+		tourPax = 1;
+		tourActivityDate = '';
+		tourSelectedGuideId = null;
+		// defer flatpickr init to next tick so inputs exist
+		setTimeout(initFlatpickr, 0);
+	}
+
+	function closeTourBookingModal() {
+		showTourBookingModal = false;
+		destroyFlatpickr();
+	}
+
+	async function createTourBooking() {
+		if (!selectedTourProductId) {
+			tourError = 'Select a tour product';
+			return;
+		}
+		if (tourPax < 1) {
+			tourError = 'At least 1 pax required';
+			return;
+		}
+		if (!tourActivityDate) {
+			tourError = 'Activity date required';
+			return;
+		}
+
+		loading = true;
+		tourError = '';
+
+		const res = await fetch('/api/tour-bookings', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				shiftId: $shiftStore.shift?.id,
+				tourProductId: selectedTourProductId,
+				guideId: tourSelectedGuideId || null,
+				pax: tourPax,
+				bookedAt: new Date().toISOString(),
+				activityDate: tourActivityDate
+			})
+		});
+
+		if (res.ok) {
+			closeTourBookingModal();
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			tourError = d.error || 'Failed to create booking';
+		}
+		loading = false;
+	}
+
+	function promptCloseTourBooking(booking: any) {
+		selectedTourBookingToClose = booking;
+		tourCloseCost = '';
+		tourCloseError = '';
+		showCloseTourModal = true;
+	}
+
+	async function executeCloseTourBooking() {
+		if (!selectedTourBookingToClose) return;
+		const cost = parseFloat(tourCloseCost);
+		if (isNaN(cost) || cost < 0) {
+			tourCloseError = 'Enter a valid cost';
+			return;
+		}
+		loading = true;
+		tourCloseError = '';
+
+		const res = await fetch('/api/tour-bookings', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				id: selectedTourBookingToClose.id,
+				action: 'close',
+				cost
+			})
+		});
+
+		if (res.ok) {
+			showCloseTourModal = false;
+			selectedTourBookingToClose = null;
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			tourCloseError = d.error || 'Failed to close booking';
+		}
+		loading = false;
+	}
+
+	function promptDeleteTourBooking(id: number) {
+		pendingDeleteTourBookingId = id;
+		confirmDeleteTourBooking = true;
+	}
+
+	async function executeDeleteTourBooking() {
+		if (!pendingDeleteTourBookingId) return;
+		loading = true;
+
+		const res = await fetch('/api/tour-bookings', {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ id: pendingDeleteTourBookingId })
+		});
+
+		if (res.ok) {
+			await invalidateAll();
+		}
+		loading = false;
+		pendingDeleteTourBookingId = null;
+	}
 
 	async function handleEndShift() {
 		error = '';
@@ -369,6 +525,12 @@
 						Store Sale
 					</md-filled-tonal-button>
 				{/if}
+				{#if data.tourProducts.length > 0}
+					<md-filled-tonal-button onclick={openTourBookingModal}>
+						<span class="material-symbols-rounded" slot="icon">tour</span>
+						Tour Booking
+					</md-filled-tonal-button>
+				{/if}
 				<div class="stats-badges">
 					<div class="stat-badge active">
 						<span class="material-symbols-rounded">pending</span>
@@ -490,7 +652,7 @@
 									</div>
 									{#if pricing?.total}
 										<div class="price-badge">
-											${(pricing.total / 100).toFixed(2)}
+											${Math.round(pricing.total / 100)}
 										</div>
 									{/if}
 								</div>
@@ -524,6 +686,70 @@
 					</div>
 				{/if}
 			</section>
+
+			<!-- Tour Bookings Section -->
+			{#if data.tourBookings.length > 0}
+				<section class="rentals-section tour-section">
+					<div class="section-header">
+						<span class="material-symbols-rounded">tour</span>
+						<h2 class="md-title-large">Tour Bookings</h2>
+						<span class="count-badge md-label-medium">{data.tourBookings.length}</span>
+					</div>
+
+					<div class="rentals-grid">
+						{#each data.tourBookings as booking}
+							<div class="rental-card tour-card">
+								<div class="rental-header">
+									<div class="customer-info">
+										<span class="material-symbols-rounded customer-icon tour-icon">tour</span>
+										<div class="customer-details">
+											<span class="md-title-medium">{booking.productName}</span>
+											<span class="md-body-small hotel-text">
+												<span class="material-symbols-rounded icon-xs">group</span>
+												{booking.pax} pax
+											</span>
+										</div>
+									</div>
+									<div class="price-badge">
+										${(booking.totalPrice / 100).toFixed(2)}
+									</div>
+								</div>
+
+								<div class="tour-dates">
+									<div class="tour-date-row">
+										<span class="material-symbols-rounded icon-sm">event</span>
+										<span class="md-body-small">Booked: {new Date(booking.bookedAt).toLocaleDateString()}</span>
+									</div>
+									<div class="tour-date-row">
+										<span class="material-symbols-rounded icon-sm">calendar_today</span>
+										<span class="md-body-small">Activity: {new Date(booking.activityDate).toLocaleDateString()}</span>
+									</div>
+								</div>
+
+								<div class="tour-pricing-row">
+									<span class="md-body-small">Price/person: ${(booking.unitPrice / 100).toFixed(2)}</span>
+								</div>
+
+								<div class="rental-footer">
+									<div class="time-info">
+										<span class="material-symbols-rounded icon-sm">schedule</span>
+										<span class="md-body-small">Created {new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+									</div>
+									<div class="rental-actions">
+										<md-icon-button onclick={() => promptDeleteTourBooking(booking.id)} disabled={loading} aria-label="Delete booking">
+											<span class="material-symbols-rounded delete-icon">delete</span>
+										</md-icon-button>
+										<md-filled-tonal-button onclick={() => promptCloseTourBooking(booking)} disabled={loading}>
+											<span class="material-symbols-rounded" slot="icon">check_circle</span>
+											Close
+										</md-filled-tonal-button>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</section>
+			{/if}
 		</main>
 
 		<!-- Create Rental Modal -->
@@ -806,11 +1032,11 @@
 					</div>
 					<div class="summary-row">
 						<span class="md-body-medium">Cash</span>
-						<span class="md-title-medium">${shiftSummary.rentalsCash.toFixed(2)}</span>
+						<span class="md-title-medium">${shiftSummary.rentalsCash}</span>
 					</div>
 					<div class="summary-row">
 						<span class="md-body-medium">Credit</span>
-						<span class="md-title-medium">${shiftSummary.rentalsCredit.toFixed(2)}</span>
+						<span class="md-title-medium">${shiftSummary.rentalsCredit}</span>
 					</div>
 				</div>
 
@@ -822,7 +1048,28 @@
 						</div>
 						<div class="summary-row">
 							<span class="md-body-medium">Total</span>
-							<span class="md-title-medium">${shiftSummary.storeSalesTotal.toFixed(2)}</span>
+							<span class="md-title-medium">${shiftSummary.storeSalesTotal}</span>
+						</div>
+					</div>
+				{/if}
+
+				{#if shiftSummary.tourBookingsCount > 0}
+					<div class="summary-section">
+						<div class="summary-header">
+							<span class="material-symbols-rounded">tour</span>
+							<span class="md-title-medium">Tour Agency ({shiftSummary.tourBookingsCount})</span>
+						</div>
+						<div class="summary-row">
+							<span class="md-body-medium">Revenue</span>
+							<span class="md-title-medium">${shiftSummary.tourRevenue.toFixed(2)}</span>
+						</div>
+						<div class="summary-row">
+							<span class="md-body-medium">Cost</span>
+							<span class="md-title-medium">-${shiftSummary.tourCost.toFixed(2)}</span>
+						</div>
+						<div class="summary-row">
+							<span class="md-body-medium">Profit</span>
+							<span class="md-title-medium">${(shiftSummary.tourRevenue - shiftSummary.tourCost).toFixed(2)}</span>
 						</div>
 					</div>
 				{/if}
@@ -834,11 +1081,11 @@
 					</div>
 					<div class="summary-row total">
 						<span class="md-body-medium">Cash</span>
-						<span class="md-headline-small">${shiftSummary.totalCash.toFixed(2)}</span>
+						<span class="md-headline-small">${shiftSummary.totalCash}</span>
 					</div>
 					<div class="summary-row total">
 						<span class="md-body-medium">Credit</span>
-						<span class="md-headline-small">${shiftSummary.totalCredit.toFixed(2)}</span>
+						<span class="md-headline-small">${shiftSummary.totalCredit}</span>
 					</div>
 				</div>
 			</div>
@@ -878,7 +1125,7 @@
 						<option value={null}>Choose a product...</option>
 						{#each data.storeProducts as product}
 							<option value={product.id}>
-								{product.name} - ${(product.price / 100).toFixed(2)} ({product.quantity} in stock)
+								{product.name} - ${Math.round(product.price / 100)} ({product.quantity} in stock)
 							</option>
 						{/each}
 					</select>
@@ -918,6 +1165,203 @@
 		</div>
 	</div>
 {/if}
+
+<!-- Tour Booking Modal -->
+{#if showTourBookingModal}
+	<div class="modal-overlay" onclick={closeTourBookingModal}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+			<div class="modal-header">
+				<div class="modal-title">
+					<span class="material-symbols-rounded">tour</span>
+					<h2 class="md-headline-small">New Tour Booking</h2>
+				</div>
+				<md-icon-button onclick={closeTourBookingModal}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
+			</div>
+
+			<div class="modal-body">
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">category</span>
+						<span class="md-title-small">Tour Product</span>
+					</label>
+					<select class="form-select" bind:value={selectedTourProductId} disabled={loading}>
+						<option value={null}>Choose a tour...</option>
+						{#each data.tourProducts as product}
+							<option value={product.id}>
+								{product.name} - ${(product.price / 100).toFixed(2)}/person
+							</option>
+						{/each}
+					</select>
+				</div>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">group</span>
+						<span class="md-title-small">Number of Pax</span>
+					</label>
+					<div class="quantity-control">
+						<button class="qty-btn" onclick={() => tourPax = Math.max(1, tourPax - 1)} disabled={loading || tourPax <= 1} aria-label="Decrease pax">
+							<span class="material-symbols-rounded">remove</span>
+						</button>
+						<span class="qty-value md-title-large">{tourPax}</span>
+						<button class="qty-btn" onclick={() => tourPax = Math.min(50, tourPax + 1)} disabled={loading || tourPax >= 50} aria-label="Increase pax">
+							<span class="material-symbols-rounded">add</span>
+						</button>
+					</div>
+					{#if selectedTourProduct}
+						<p class="form-hint md-body-small">
+							Total: ${((selectedTourProduct.price / 100) * tourPax).toFixed(2)} ({tourPax} x ${(selectedTourProduct.price / 100).toFixed(2)})
+						</p>
+					{/if}
+				</div>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">calendar_today</span>
+						<span class="md-title-small">Activity Date</span>
+					</label>
+					<input
+						type="text"
+						class="flatpickr-input form-date-input"
+						placeholder="Select activity date..."
+						bind:this={activityDateInput}
+						disabled={loading}
+						readonly
+					/>
+				</div>
+
+				{#if selectedTourProduct?.requiresGuide}
+					<div class="form-section">
+						<GuideSelector
+							guides={data.guides}
+							bind:selectedGuideId={tourSelectedGuideId}
+							loading={loading}
+							onVerifyPin={verifyGuidePin}
+						/>
+					</div>
+				{/if}
+
+				{#if tourError}
+					<div class="error-banner">
+						<span class="material-symbols-rounded">error</span>
+						<span class="md-body-medium">{tourError}</span>
+					</div>
+				{/if}
+			</div>
+
+			<div class="modal-footer">
+				<md-outlined-button onclick={closeTourBookingModal} disabled={loading}>Cancel</md-outlined-button>
+				<md-filled-button onclick={createTourBooking} disabled={loading}>
+					<span class="material-symbols-rounded" slot="icon">check</span>
+					Create Booking
+				</md-filled-button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Close Tour Booking Modal -->
+{#if showCloseTourModal && selectedTourBookingToClose}
+	<div class="modal-overlay" onclick={() => { showCloseTourModal = false; }}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+			<div class="modal-header">
+				<div class="modal-title">
+					<span class="material-symbols-rounded">check_circle</span>
+					<h2 class="md-headline-small">Close Tour Booking</h2>
+				</div>
+				<md-icon-button onclick={() => { showCloseTourModal = false; }}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
+			</div>
+
+			<div class="modal-body">
+				<div class="summary-section">
+					<div class="summary-header">
+						<span class="material-symbols-rounded">tour</span>
+						<span class="md-title-medium">{selectedTourBookingToClose.productName}</span>
+					</div>
+					<div class="summary-row">
+						<span class="md-body-medium">Pax</span>
+						<span class="md-title-medium">{selectedTourBookingToClose.pax}</span>
+					</div>
+					<div class="summary-row">
+						<span class="md-body-medium">Revenue (price x pax)</span>
+						<span class="md-title-medium">${(selectedTourBookingToClose.totalPrice / 100).toFixed(2)}</span>
+					</div>
+					<div class="summary-row">
+						<span class="md-body-medium">Activity Date</span>
+						<span class="md-title-medium">{new Date(selectedTourBookingToClose.activityDate).toLocaleDateString()}</span>
+					</div>
+				</div>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">payments</span>
+						<span class="md-title-small">Cost (variable)</span>
+					</label>
+					<md-outlined-text-field
+						label="Cost"
+						type="number"
+						step="0.01"
+						min="0"
+						placeholder="Enter actual cost..."
+						value={tourCloseCost}
+						oninput={(e: Event) => tourCloseCost = (e.target as HTMLInputElement).value}
+						disabled={loading}
+						prefix-text="$"
+						supporting-text="The variable cost for this tour (not multiplied by pax)"
+					>
+						<span class="material-symbols-rounded" slot="leading-icon">payments</span>
+					</md-outlined-text-field>
+				</div>
+
+				{#if tourCloseCost && parseFloat(tourCloseCost) >= 0}
+					<div class="summary-section">
+						<div class="summary-row">
+							<span class="md-body-medium">Revenue</span>
+							<span class="md-title-medium">${(selectedTourBookingToClose.totalPrice / 100).toFixed(2)}</span>
+						</div>
+						<div class="summary-row">
+							<span class="md-body-medium">Cost</span>
+							<span class="md-title-medium">-${parseFloat(tourCloseCost).toFixed(2)}</span>
+						</div>
+						<div class="summary-row total">
+							<span class="md-body-medium">Profit</span>
+							<span class="md-headline-small">${((selectedTourBookingToClose.totalPrice / 100) - parseFloat(tourCloseCost)).toFixed(2)}</span>
+						</div>
+					</div>
+				{/if}
+
+				{#if tourCloseError}
+					<div class="error-banner">
+						<span class="material-symbols-rounded">error</span>
+						<span class="md-body-medium">{tourCloseError}</span>
+					</div>
+				{/if}
+			</div>
+
+			<div class="modal-footer">
+				<md-outlined-button onclick={() => { showCloseTourModal = false; }} disabled={loading}>Cancel</md-outlined-button>
+				<md-filled-button onclick={executeCloseTourBooking} disabled={loading}>
+					<span class="material-symbols-rounded" slot="icon">check_circle</span>
+					Close Booking
+				</md-filled-button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<ConfirmModal
+	bind:open={confirmDeleteTourBooking}
+	title="Delete Tour Booking"
+	message="Are you sure you want to delete this tour booking? This action cannot be undone."
+	confirmText="Delete"
+	cancelText="Cancel"
+	variant="danger"
+	onConfirm={executeDeleteTourBooking}
+/>
 
 <CloseRentalModal
 	bind:open={closeRentalModalOpen}
@@ -1853,6 +2297,51 @@
 		to {
 			opacity: 1;
 		}
+	}
+
+	/* Tour Booking Styles */
+	.tour-icon {
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+	}
+
+	.tour-dates {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.tour-date-row {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.tour-pricing-row {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.delete-icon {
+		color: var(--md-sys-color-error);
+	}
+
+	/* Flatpickr / Date Input Styles */
+	.form-date-input {
+		width: 100%;
+		padding: var(--md-sys-spacing-md);
+		border: 1px solid var(--md-sys-color-outline);
+		border-radius: var(--md-sys-shape-corner-small);
+		background: var(--md-sys-color-surface);
+		color: var(--md-sys-color-on-surface);
+		font: var(--md-sys-typescale-body-large);
+		cursor: pointer;
+	}
+
+	.form-date-input:focus {
+		outline: none;
+		border-color: var(--md-sys-color-primary);
+		border-width: 2px;
 	}
 
 	/* Responsive */

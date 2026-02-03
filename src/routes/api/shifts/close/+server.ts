@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { shifts, rentals, operators, storeSales, storeProducts } from '$lib/server/db/schema';
+import { shifts, rentals, operators, storeSales, storeProducts, tourBookings, tourAgencyProducts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import * as XLSX from 'xlsx';
@@ -70,12 +70,32 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		.leftJoin(storeProducts, eq(storeSales.productId, storeProducts.id))
 		.where(eq(storeSales.shiftId, shift.id));
 
+	const shiftTourBookings = await db
+		.select({
+			id: tourBookings.id,
+			pax: tourBookings.pax,
+			unitPrice: tourBookings.unitPrice,
+			totalPrice: tourBookings.totalPrice,
+			cost: tourBookings.cost,
+			bookedAt: tourBookings.bookedAt,
+			activityDate: tourBookings.activityDate,
+			status: tourBookings.status,
+			createdAt: tourBookings.createdAt,
+			productName: tourAgencyProducts.name
+		})
+		.from(tourBookings)
+		.leftJoin(tourAgencyProducts, eq(tourBookings.tourProductId, tourAgencyProducts.id))
+		.where(eq(tourBookings.shiftId, shift.id));
+
 	const rentalRevenue = shiftRentals.reduce((acc, r) => {
 		const pricing = r.pricing as Pricing;
 		return acc + (pricing?.total || 0);
 	}, 0);
 
 	const salesRevenue = shiftSales.reduce((acc, s) => acc + s.total, 0);
+
+	const tourRevenue = shiftTourBookings.reduce((acc, b) => acc + b.totalPrice, 0);
+	const tourCost = shiftTourBookings.reduce((acc, b) => acc + (b.cost ?? 0), 0);
 
 	const [updatedShift] = await db
 		.update(shifts)
@@ -86,7 +106,10 @@ export const POST: RequestHandler = async ({ cookies }) => {
 				rentalRevenue,
 				salesCount: shiftSales.length,
 				salesRevenue,
-				totalRevenue: rentalRevenue + salesRevenue
+				tourBookingsCount: shiftTourBookings.length,
+				tourRevenue,
+				tourCost,
+				totalRevenue: rentalRevenue + salesRevenue + tourRevenue
 			}
 		})
 		.where(eq(shifts.id, shift.id))
@@ -173,8 +196,8 @@ export const POST: RequestHandler = async ({ cookies }) => {
 	const salesData = shiftSales.map(s => ({
 		'Product': s.productName || 'Unknown',
 		'Quantity': s.quantity,
-		'Unit Price ($)': (s.unitPrice / 100).toFixed(2),
-		'Total ($)': (s.total / 100).toFixed(2),
+		'Unit Price ($)': Math.round(s.unitPrice / 100),
+		'Total ($)': Math.round(s.total / 100),
 		'Time': s.createdAt ? new Date(s.createdAt).toLocaleString() : ''
 	}));
 
@@ -182,31 +205,63 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		'Product': '',
 		'Quantity': '' as any,
 		'Unit Price ($)': 'TOTALS:',
-		'Total ($)': (salesRevenue / 100).toFixed(2),
+		'Total ($)': Math.round(salesRevenue / 100),
 		'Time': `${shiftSales.length} sales`
 	});
 
+	// Tour bookings data
+	const tourData = shiftTourBookings.map(b => ({
+		'Tour': b.productName || 'Unknown',
+		'Pax': b.pax,
+		'Price/Person ($)': Math.round(b.unitPrice / 100),
+		'Revenue ($)': Math.round(b.totalPrice / 100),
+		'Cost ($)': b.cost !== null ? Math.round(b.cost / 100) : 'Pending',
+		'Profit ($)': b.cost !== null ? Math.round((b.totalPrice - b.cost) / 100) : 'Pending',
+		'Booked': b.bookedAt ? new Date(b.bookedAt).toLocaleDateString() : '',
+		'Activity Date': b.activityDate ? new Date(b.activityDate).toLocaleDateString() : '',
+		'Status': b.status
+	}));
+
+	if (tourData.length > 0) {
+		tourData.push({
+			'Tour': 'TOTALS',
+			'Pax': shiftTourBookings.reduce((sum, b) => sum + b.pax, 0),
+			'Price/Person ($)': '',
+			'Revenue ($)': Math.round(tourRevenue / 100),
+			'Cost ($)': Math.round(tourCost / 100),
+			'Profit ($)': Math.round((tourRevenue - tourCost) / 100),
+			'Booked': `${shiftTourBookings.length} bookings`,
+			'Activity Date': '',
+			'Status': ''
+		});
+	}
+
 	// Store sales cash/credit split (assuming all store sales are cash for now, can be enhanced)
-	const storeSalesCash = salesRevenue / 100; // Convert from cents to dollars
+	const storeSalesCash = Math.round(salesRevenue / 100); // Convert from cents to dollars
 	const storeSalesCredit = 0; // Would need to track payment method for store sales
 
 	// Create summary/small box data
 	const summaryData = [
 		{ 'Category': 'RENTALS', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Collected Cash', 'Cash ($)': cashTotal.toFixed(2), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Collected Credit', 'Cash ($)': '', 'Credit ($)': creditTotal.toFixed(2), 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Unpaid (Yet to Pay)', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': '' },
-		{ 'Category': 'Discounts Given', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': discountTotal.toFixed(2) },
-		{ 'Category': 'Rental Subtotal', 'Cash ($)': cashTotal.toFixed(2), 'Credit ($)': creditTotal.toFixed(2), 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': finalTotal.toFixed(2) },
+		{ 'Category': 'Collected Cash', 'Cash ($)': cashTotal, 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Collected Credit', 'Cash ($)': '', 'Credit ($)': creditTotal, 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Unpaid (Yet to Pay)', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal, 'Total ($)': '' },
+		{ 'Category': 'Discounts Given', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': discountTotal },
+		{ 'Category': 'Rental Subtotal', 'Cash ($)': cashTotal, 'Credit ($)': creditTotal, 'Unpaid ($)': unpaidTotal, 'Total ($)': finalTotal },
 		{ 'Category': '', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
 		{ 'Category': 'STORE SALES', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Store Sales Total', 'Cash ($)': storeSalesCash.toFixed(2), 'Credit ($)': storeSalesCredit.toFixed(2), 'Unpaid ($)': '0.00', 'Total ($)': (salesRevenue / 100).toFixed(2) },
+		{ 'Category': 'Store Sales Total', 'Cash ($)': storeSalesCash, 'Credit ($)': storeSalesCredit, 'Unpaid ($)': 0, 'Total ($)': Math.round(salesRevenue / 100) },
+		{ 'Category': '', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'TOUR AGENCY', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Tour Revenue', 'Cash ($)': Math.round(tourRevenue / 100), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': Math.round(tourRevenue / 100) },
+		{ 'Category': 'Tour Cost', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': -Math.round(tourCost / 100) },
+		{ 'Category': 'Tour Profit', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': Math.round((tourRevenue - tourCost) / 100) },
 		{ 'Category': '', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
 		{ 'Category': 'SMALL BOX SUMMARY', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Total Cash Collected', 'Cash ($)': (cashTotal + storeSalesCash).toFixed(2), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Total Credit Collected', 'Cash ($)': '', 'Credit ($)': (creditTotal + storeSalesCredit).toFixed(2), 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Total Unpaid', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': '' },
-		{ 'Category': 'GRAND TOTAL', 'Cash ($)': (cashTotal + storeSalesCash).toFixed(2), 'Credit ($)': (creditTotal + storeSalesCredit).toFixed(2), 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': (finalTotal + salesRevenue / 100).toFixed(2) },
+		{ 'Category': 'Total Cash Collected', 'Cash ($)': (cashTotal + storeSalesCash + Math.round(tourRevenue / 100)), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Total Credit Collected', 'Cash ($)': '', 'Credit ($)': (creditTotal + storeSalesCredit), 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Total Unpaid', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal, 'Total ($)': '' },
+		{ 'Category': 'GRAND TOTAL', 'Cash ($)': (cashTotal + storeSalesCash + Math.round(tourRevenue / 100)), 'Credit ($)': (creditTotal + storeSalesCredit), 'Unpaid ($)': unpaidTotal, 'Total ($)': Math.round(finalTotal + salesRevenue / 100 + tourRevenue / 100) },
 	];
 
 	const wb = XLSX.utils.book_new();
@@ -222,6 +277,11 @@ export const POST: RequestHandler = async ({ cookies }) => {
 	if (shiftSales.length > 0) {
 		const wsSales = XLSX.utils.json_to_sheet(salesData);
 		XLSX.utils.book_append_sheet(wb, wsSales, 'Store Sales');
+	}
+
+	if (shiftTourBookings.length > 0) {
+		const wsTour = XLSX.utils.json_to_sheet(tourData);
+		XLSX.utils.book_append_sheet(wb, wsTour, 'Tour Agency');
 	}
 
 	const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
