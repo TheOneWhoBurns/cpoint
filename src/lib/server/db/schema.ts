@@ -66,6 +66,7 @@ export const rentals = pgTable('rentals', {
 	expectedReturnAt: timestamp('expected_return_at', { withTimezone: true }),
 	returnedAt: timestamp('returned_at', { withTimezone: true }),
 	returnNotes: text('return_notes'),
+	deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 }, (table) => [
 	index('idx_rentals_status').on(table.status),
@@ -132,6 +133,7 @@ export const storeSales = pgTable('store_sales', {
 	quantity: integer('quantity').notNull(),
 	unitPrice: integer('unit_price').notNull(),
 	total: integer('total').notNull(),
+	deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 }, (table) => [
 	index('idx_store_sales_shift').on(table.shiftId)
@@ -158,6 +160,7 @@ export const tourBookings = pgTable('tour_bookings', {
 	bookedAt: timestamp('booked_at', { withTimezone: true }).notNull(),
 	activityDate: timestamp('activity_date', { withTimezone: true }).notNull(),
 	status: text('status').notNull().default('active'),
+	deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 }, (table) => [
 	index('idx_tour_bookings_shift').on(table.shiftId),

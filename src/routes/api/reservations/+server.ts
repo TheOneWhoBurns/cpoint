@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { reservations, rentals } from '$lib/server/db/schema';
-import { eq, and, or, lte, gte } from 'drizzle-orm';
+import { reservations, operators } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 interface ReservationItem {
@@ -11,6 +11,49 @@ interface ReservationItem {
 	code?: string;
 	name: string;
 	quantity?: number;
+}
+
+async function validateNoOverlap(
+	finalItems: ReservationItem[],
+	finalFrom: Date,
+	finalUntil: Date,
+	excludeReservationId?: number
+) {
+	const trackedIds = finalItems
+		.filter(i => i.type === 'tracked' && i.itemId)
+		.map(i => i.itemId!);
+
+	if (trackedIds.length === 0) return null;
+
+	const existingReservations = await db
+		.select()
+		.from(reservations)
+		.where(eq(reservations.status, 'active'));
+
+	for (const existing of existingReservations) {
+		if (excludeReservationId && existing.id === excludeReservationId) continue;
+
+		const existingItems = existing.items as ReservationItem[];
+		const existingFrom = new Date(existing.reservedFrom);
+		const existingUntil = new Date(existing.reservedUntil);
+
+		if (finalFrom < existingUntil && finalUntil > existingFrom) {
+			const existingTrackedIds = existingItems
+				.filter(i => i.type === 'tracked' && i.itemId)
+				.map(i => i.itemId!);
+
+			const overlap = trackedIds.filter(id => existingTrackedIds.includes(id));
+			if (overlap.length > 0) {
+				const existingCustomer = existing.customer as { name?: string } | null;
+				return {
+					error: `Equipment conflict with existing reservation: ${existingCustomer?.name || existing.reason || `#${existing.id}`}`,
+					conflictingReservation: existing
+				};
+			}
+		}
+	}
+
+	return null;
 }
 
 export const GET: RequestHandler = async () => {
@@ -41,36 +84,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	// Check for overlapping active reservations on the same tracked items
-	const existingReservations = await db
-		.select()
-		.from(reservations)
-		.where(eq(reservations.status, 'active'));
-
-	const requestedTrackedIds = (items as ReservationItem[])
-		.filter(i => i.type === 'tracked' && i.itemId)
-		.map(i => i.itemId!);
-
-	for (const existing of existingReservations) {
-		const existingItems = existing.items as ReservationItem[];
-		const existingFrom = new Date(existing.reservedFrom);
-		const existingUntil = new Date(existing.reservedUntil);
-
-		// Check time overlap
-		if (from < existingUntil && until > existingFrom) {
-			// Check item overlap
-			const existingTrackedIds = existingItems
-				.filter(i => i.type === 'tracked' && i.itemId)
-				.map(i => i.itemId!);
-
-			const overlap = requestedTrackedIds.filter(id => existingTrackedIds.includes(id));
-			if (overlap.length > 0) {
-				const existingCustomer = existing.customer as { name?: string } | null;
-				return json({
-					error: `Equipment conflict with existing reservation: ${existingCustomer?.name || existing.reason || `#${existing.id}`}`,
-					conflictingReservation: existing
-				}, { status: 409 });
-			}
-		}
+	const conflict = await validateNoOverlap(items as ReservationItem[], from, until);
+	if (conflict) {
+		return json(conflict, { status: 409 });
 	}
 
 	const [created] = await db
@@ -92,7 +108,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
-	const { id, action, rentalId } = await request.json();
+	const { id, action, rentalId, customer, reason, items, reservedFrom, reservedUntil, guideId, passcode } = await request.json();
 
 	if (!id) {
 		return json({ error: 'Reservation ID required' }, { status: 400 });
@@ -103,11 +119,24 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		return json({ error: 'Reservation not found' }, { status: 404 });
 	}
 
-	if (reservation.status !== 'active') {
-		return json({ error: 'Reservation is not active' }, { status: 400 });
-	}
-
 	if (action === 'cancel') {
+		if (reservation.status !== 'active') {
+			return json({ error: 'Reservation is not active' }, { status: 400 });
+		}
+
+		if (!passcode) {
+			return json({ error: 'Passcode required' }, { status: 400 });
+		}
+
+		const [operator] = await db
+			.select()
+			.from(operators)
+			.where(eq(operators.passcode, passcode));
+
+		if (!operator) {
+			return json({ error: 'Invalid passcode' }, { status: 403 });
+		}
+
 		const [updated] = await db
 			.update(reservations)
 			.set({
@@ -120,7 +149,58 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		return json(updated);
 	}
 
+	if (action === 'edit') {
+		if (reservation.status !== 'active') {
+			return json({ error: 'Cannot edit a non-active reservation' }, { status: 400 });
+		}
+
+		const updates: Record<string, unknown> = {};
+
+		if (customer !== undefined) updates.customer = customer;
+		if (reason !== undefined) updates.reason = reason;
+		if (items !== undefined) updates.items = items;
+		if (guideId !== undefined) updates.guideId = guideId || null;
+
+		if (reservedFrom !== undefined) {
+			updates.reservedFrom = new Date(reservedFrom);
+		}
+		if (reservedUntil !== undefined) {
+			updates.reservedUntil = new Date(reservedUntil);
+		}
+
+		// Validate date range if either date is being updated
+		const finalFrom = updates.reservedFrom ?? reservation.reservedFrom;
+		const finalUntil = updates.reservedUntil ?? reservation.reservedUntil;
+		if (finalFrom && finalUntil && new Date(finalUntil) <= new Date(finalFrom)) {
+			return json({ error: 'End time must be after start time' }, { status: 400 });
+		}
+
+		if (Object.keys(updates).length === 0) {
+			return json({ error: 'No valid updates provided' }, { status: 400 });
+		}
+
+		// Validate no overlap with other reservations
+		const finalItems = (items !== undefined ? items : reservation.items) as ReservationItem[];
+
+		const conflict = await validateNoOverlap(finalItems, new Date(finalFrom as string | Date), new Date(finalUntil as string | Date), id);
+		if (conflict) {
+			return json(conflict, { status: 409 });
+		}
+
+		const [updated] = await db
+			.update(reservations)
+			.set(updates)
+			.where(eq(reservations.id, id))
+			.returning();
+
+		return json(updated);
+	}
+
 	if (action === 'fulfill') {
+		if (reservation.status !== 'active') {
+			return json({ error: 'Reservation is not active' }, { status: 400 });
+		}
+
 		const [updated] = await db
 			.update(reservations)
 			.set({

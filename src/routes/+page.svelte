@@ -16,6 +16,7 @@
 	import CloseRentalModal from '$lib/components/CloseRentalModal.svelte';
 	import EditRentalModal from '$lib/components/EditRentalModal.svelte';
 	import GuideSelector from '$lib/components/GuideSelector.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 	import flatpickr from 'flatpickr';
 	import 'flatpickr/dist/flatpickr.min.css';
 
@@ -84,6 +85,240 @@
 	let reservationUntilInput = $state<HTMLInputElement | null>(null);
 	let reservationFromPicker: flatpickr.Instance | null = null;
 	let reservationUntilPicker: flatpickr.Instance | null = null;
+
+	// Collapsible sections
+	let showPreviousRentals = $state(false);
+
+	// Passcode-protected delete modal
+	let showDeleteModal = $state(false);
+	let deleteTarget = $state<{ type: string; id: number; label: string } | null>(null);
+	let deletePasscode = $state('');
+	let deleteError = $state('');
+	let deleteLoading = $state(false);
+
+	async function executeDelete() {
+		if (!deleteTarget || deletePasscode.length !== 4) {
+			deleteError = 'Enter 4-digit passcode';
+			return;
+		}
+		deleteLoading = true;
+		deleteError = '';
+
+		const endpointMap: Record<string, string> = {
+			rental: '/api/rentals',
+			storeSale: '/api/store-sales',
+			tourBooking: '/api/tour-bookings',
+			reservation: '/api/reservations'
+		};
+
+		const url = endpointMap[deleteTarget.type];
+		if (!url) { deleteError = 'Unknown type'; deleteLoading = false; return; }
+
+		try {
+			let res: Response;
+			if (deleteTarget.type === 'reservation') {
+				res = await fetch(url, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ id: deleteTarget.id, action: 'cancel', passcode: deletePasscode })
+				});
+			} else {
+				res = await fetch(url, {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ id: deleteTarget.id, passcode: deletePasscode })
+				});
+			}
+
+			if (res.ok) {
+				showDeleteModal = false;
+				deleteTarget = null;
+				deletePasscode = '';
+				await invalidateAll();
+				showToast('Deleted successfully');
+			} else {
+				const d = await res.json();
+				deleteError = d.error || 'Delete failed';
+			}
+		} catch {
+			deleteError = 'Network error';
+		}
+		deleteLoading = false;
+	}
+
+	function promptDelete(type: string, id: number, label: string) {
+		deleteTarget = { type, id, label };
+		deletePasscode = '';
+		deleteError = '';
+		showDeleteModal = true;
+	}
+
+	// Reservation edit state
+	let showEditReservationModal = $state(false);
+	let editingReservation = $state<any>(null);
+	let editResCustomerName = $state('');
+	let editResCustomerHotel = $state('');
+	let editResReason = $state('');
+	let editResFrom = $state('');
+	let editResUntil = $state('');
+	let editResError = $state('');
+	let editResFromInput = $state<HTMLInputElement | null>(null);
+	let editResUntilInput = $state<HTMLInputElement | null>(null);
+	let editResFromPicker: flatpickr.Instance | null = null;
+	let editResUntilPicker: flatpickr.Instance | null = null;
+
+	function openEditReservation(reservation: any) {
+		editingReservation = reservation;
+		const customer = reservation.customer as {name?: string, hotel?: string} | null;
+		editResCustomerName = customer?.name || '';
+		editResCustomerHotel = customer?.hotel || '';
+		editResReason = reservation.reason || '';
+		editResFrom = reservation.reservedFrom ? new Date(reservation.reservedFrom).toISOString().slice(0, 16) : '';
+		editResUntil = reservation.reservedUntil ? new Date(reservation.reservedUntil).toISOString().slice(0, 16) : '';
+		editResError = '';
+		showEditReservationModal = true;
+	}
+
+	$effect(() => {
+		if (showEditReservationModal && editResFromInput) {
+			editResFromPicker = flatpickr(editResFromInput, {
+				enableTime: true, dateFormat: 'Y-m-d H:i', defaultDate: editResFrom || undefined,
+				onChange: ([date]) => { if (date) editResFrom = date.toISOString(); }
+			});
+		}
+		return () => { editResFromPicker?.destroy(); };
+	});
+
+	$effect(() => {
+		if (showEditReservationModal && editResUntilInput) {
+			editResUntilPicker = flatpickr(editResUntilInput, {
+				enableTime: true, dateFormat: 'Y-m-d H:i', defaultDate: editResUntil || undefined,
+				onChange: ([date]) => { if (date) editResUntil = date.toISOString(); }
+			});
+		}
+		return () => { editResUntilPicker?.destroy(); };
+	});
+
+	async function saveReservationEdit() {
+		if (!editingReservation) return;
+		loading = true;
+		editResError = '';
+
+		const res = await fetch('/api/reservations', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				id: editingReservation.id,
+				action: 'edit',
+				customer: { name: editResCustomerName, hotel: editResCustomerHotel },
+				reason: editResReason,
+				reservedFrom: editResFrom || undefined,
+				reservedUntil: editResUntil || undefined
+			})
+		});
+
+		if (res.ok) {
+			showEditReservationModal = false;
+			editingReservation = null;
+			await invalidateAll();
+			showToast('Reservation updated');
+		} else {
+			const d = await res.json();
+			editResError = d.error || 'Failed to update';
+		}
+		loading = false;
+	}
+
+	// Tour booking edit state
+	let showEditTourModal = $state(false);
+	let editingTourBooking = $state<any>(null);
+	let editTourProductId = $state<number | null>(null);
+	let editTourPax = $state(1);
+	let editTourActivityDate = $state('');
+	let editTourError = $state('');
+	let editTourDateInput = $state<HTMLInputElement | null>(null);
+	let editTourDatePicker: flatpickr.Instance | null = null;
+
+	function openEditTourBooking(booking: any) {
+		editingTourBooking = booking;
+		editTourProductId = booking.tourProductId;
+		editTourPax = booking.pax;
+		editTourActivityDate = booking.activityDate ? new Date(booking.activityDate).toISOString().slice(0, 10) : '';
+		editTourError = '';
+		showEditTourModal = true;
+	}
+
+	$effect(() => {
+		if (showEditTourModal && editTourDateInput) {
+			editTourDatePicker = flatpickr(editTourDateInput, {
+				dateFormat: 'Y-m-d', defaultDate: editTourActivityDate || undefined,
+				onChange: ([date]) => { if (date) editTourActivityDate = date.toISOString(); }
+			});
+		}
+		return () => { editTourDatePicker?.destroy(); };
+	});
+
+	async function saveTourBookingEdit() {
+		if (!editingTourBooking) return;
+		loading = true;
+		editTourError = '';
+
+		const res = await fetch('/api/tour-bookings', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				id: editingTourBooking.id,
+				action: 'edit',
+				tourProductId: editTourProductId,
+				pax: editTourPax,
+				activityDate: editTourActivityDate || undefined
+			})
+		});
+
+		if (res.ok) {
+			showEditTourModal = false;
+			editingTourBooking = null;
+			await invalidateAll();
+			showToast('Tour booking updated');
+		} else {
+			const d = await res.json();
+			editTourError = d.error || 'Failed to update';
+		}
+		loading = false;
+	}
+
+	// Toast notifications
+	let toastVisible = $state(false);
+	let toastMessage = $state('');
+	let toastVariant = $state<'success' | 'error' | 'warning' | 'info'>('success');
+
+	function showToast(message: string, variant: 'success' | 'error' | 'warning' | 'info' = 'success') {
+		toastMessage = message;
+		toastVariant = variant;
+		toastVisible = true;
+	}
+
+	// Live elapsed time ticker - updates every 30 seconds
+	let now = $state(Date.now());
+	$effect(() => {
+		const interval = setInterval(() => { now = Date.now(); }, 30_000);
+		return () => clearInterval(interval);
+	});
+
+	// Escape key handler for modals
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key !== 'Escape') return;
+		if (showDeleteModal) { showDeleteModal = false; return; }
+		if (showEditReservationModal) { showEditReservationModal = false; return; }
+		if (showEditTourModal) { showEditTourModal = false; return; }
+		if (showConflictModal) { showConflictModal = false; return; }
+		if (showCloseTourModal) { showCloseTourModal = false; return; }
+		if (showTourBookingModal) { closeTourBookingModal(); return; }
+		if (showStoreSaleModal) { showStoreSaleModal = false; return; }
+		if (showShiftSummary) { showShiftSummary = false; return; }
+		if (showReservationModal) { closeReservationModal(); return; }
+		if (showForm) { resetForm(); return; }
+	}
 
 	// Theme
 	let currentTheme = $state<Theme>('system');
@@ -389,6 +624,7 @@
 		if (res.ok) {
 			closeTourBookingModal();
 			await invalidateAll();
+			showToast('Tour booking created');
 		} else {
 			const d = await res.json();
 			tourError = d.error || 'Failed to create booking';
@@ -427,6 +663,7 @@
 			showCloseTourModal = false;
 			selectedTourBookingToClose = null;
 			await invalidateAll();
+			showToast('Tour booking closed');
 		} else {
 			const d = await res.json();
 			tourCloseError = d.error || 'Failed to close booking';
@@ -696,6 +933,7 @@
 			fromReservationId = null;
 			resetForm();
 			await invalidateAll();
+			showToast('Rental created successfully');
 		} else if (res.status === 409) {
 			const d = await res.json();
 			if (d.error === 'reservation_conflict') {
@@ -818,6 +1056,7 @@
 			selectedStoreProductId = null;
 			saleQuantity = 1;
 			await invalidateAll();
+			showToast('Store sale completed');
 		} else {
 			const d = await res.json();
 			saleError = d.error || 'Failed to create sale';
@@ -838,21 +1077,28 @@
 				currentShiftId: $shiftStore.shift?.id
 			})
 		});
-		if (res.ok) await invalidateAll();
+		if (res.ok) {
+			await invalidateAll();
+			showToast('Rental closed successfully');
+		}
 		loading = false;
 		selectedRentalToClose = null;
 	}
 
 	function getElapsedTime(startedAt: string | Date): string {
 		const start = new Date(startedAt);
-		const now = new Date();
-		const diff = Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
+		// Uses reactive `now` ticker to auto-update elapsed time
+		const diff = Math.floor((now - start.getTime()) / 1000 / 60);
 		const hours = Math.floor(diff / 60);
 		const mins = diff % 60;
 		if (hours > 0) return `${hours}h ${mins}m`;
 		return `${mins}m`;
 	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
+
+<Toast bind:visible={toastVisible} message={toastMessage} variant={toastVariant} />
 
 {#if $shiftStore.isLoggedIn}
 	<div class="app-shell">
@@ -938,7 +1184,7 @@
 							{@const customer = rental.customer as {name?: string, hotel?: string}}
 							{@const items = rental.items as Array<{name: string, quantity?: number, code?: string}>}
 							{@const pricing = rental.pricing as {type?: string}}
-							<div class="rental-card">
+							<button class="rental-card clickable" onclick={() => promptEditRental(rental.id)} disabled={loading}>
 								<div class="rental-header">
 									<div class="customer-info">
 										<span class="material-symbols-rounded customer-icon">person</span>
@@ -976,17 +1222,17 @@
 										<span class="md-body-small">Started {new Date(rental.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
 										<span class="elapsed-badge">{getElapsedTime(rental.startedAt)}</span>
 									</div>
-									<div class="rental-actions">
-										<md-icon-button onclick={() => promptEditRental(rental.id)} disabled={loading} aria-label="Edit rental">
-											<span class="material-symbols-rounded">edit</span>
+									<div class="rental-actions" onclick={(e) => e.stopPropagation()}>
+										<md-icon-button onclick={(e: Event) => { e.stopPropagation(); promptDelete('rental', rental.id, customer?.name || 'Rental'); }} disabled={loading} aria-label="Delete rental">
+											<span class="material-symbols-rounded delete-icon">delete</span>
 										</md-icon-button>
-										<md-filled-tonal-button onclick={() => promptCloseRental(rental.id)} disabled={loading}>
+										<md-filled-tonal-button onclick={(e: Event) => { e.stopPropagation(); promptCloseRental(rental.id); }} disabled={loading}>
 											<span class="material-symbols-rounded" slot="icon">check_circle</span>
-											Close Rental
+											Close
 										</md-filled-tonal-button>
 									</div>
 								</div>
-							</div>
+							</button>
 						{/each}
 					</div>
 				{/if}
@@ -1006,7 +1252,7 @@
 							{@const resCustomer = reservation.customer as {name?: string, hotel?: string} | null}
 							{@const resItems = reservation.items as Array<{name: string, quantity?: number, code?: string}>}
 							{@const expired = isReservationExpired(reservation.reservedUntil)}
-							<div class="rental-card reservation-card" class:expired>
+							<button class="rental-card reservation-card clickable" class:expired onclick={() => openEditReservation(reservation)} disabled={loading}>
 								<div class="rental-header">
 									<div class="customer-info">
 										<span class="material-symbols-rounded customer-icon reservation-icon">event</span>
@@ -1057,91 +1303,21 @@
 										<span class="material-symbols-rounded icon-sm">schedule</span>
 										<span class="md-body-small">Created {reservation.createdAt ? new Date(reservation.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
 									</div>
-									<div class="rental-actions">
-										<md-icon-button onclick={() => cancelReservation(reservation.id)} disabled={loading} aria-label="Cancel reservation">
-											<span class="material-symbols-rounded delete-icon">cancel</span>
+									<div class="rental-actions" onclick={(e) => e.stopPropagation()}>
+										<md-icon-button onclick={(e: Event) => { e.stopPropagation(); promptDelete('reservation', reservation.id, resCustomer?.name || 'Reservation'); }} disabled={loading} aria-label="Cancel reservation">
+											<span class="material-symbols-rounded delete-icon">delete</span>
 										</md-icon-button>
-										<md-filled-tonal-button onclick={() => startRentalFromReservation(reservation)} disabled={loading}>
+										<md-filled-tonal-button onclick={(e: Event) => { e.stopPropagation(); startRentalFromReservation(reservation); }} disabled={loading}>
 											<span class="material-symbols-rounded" slot="icon">play_arrow</span>
 											Start Rental
 										</md-filled-tonal-button>
 									</div>
 								</div>
-							</div>
+							</button>
 						{/each}
 					</div>
 				</section>
 			{/if}
-
-			<!-- Previous Shift Rentals Section -->
-			<section class="rentals-section previous-section">
-				<div class="section-header">
-					<span class="material-symbols-rounded">history</span>
-					<h2 class="md-title-large">Previous Shift Rentals</h2>
-					<span class="count-badge md-label-medium">{data.previousShiftRentals.length}</span>
-				</div>
-
-				{#if data.previousShiftRentals.length === 0}
-					<div class="empty-state compact">
-						<span class="material-symbols-rounded">folder_off</span>
-						<p class="md-body-medium">No previous rentals</p>
-					</div>
-				{:else}
-					<div class="rentals-grid previous">
-						{#each data.previousShiftRentals as rental}
-							{@const customer = rental.customer as {name?: string, hotel?: string}}
-							{@const items = rental.items as Array<{name: string, quantity?: number, code?: string}>}
-							{@const pricing = rental.pricing as {type?: string, total?: number}}
-							<div class="rental-card completed">
-								<div class="rental-header">
-									<div class="customer-info">
-										<span class="material-symbols-rounded customer-icon">person</span>
-										<div class="customer-details">
-											<span class="md-title-medium">{customer?.name || 'Unknown'}</span>
-											{#if customer?.hotel}
-												<span class="md-body-small hotel-text">
-													<span class="material-symbols-rounded icon-xs">hotel</span>
-													{customer.hotel}
-												</span>
-											{/if}
-										</div>
-									</div>
-									{#if pricing?.total}
-										<div class="price-badge">
-											${Math.round(pricing.total / 100)}
-										</div>
-									{/if}
-								</div>
-
-								<div class="rental-items-list compact">
-									{#each items as item}
-										<span class="item-text md-body-small">
-											{item.name}{item.code ? ` (${item.code})` : ''}{item.quantity ? ` x${item.quantity}` : ''}
-										</span>
-									{/each}
-								</div>
-
-								<div class="rental-times">
-									<div class="time-row">
-										<span class="material-symbols-rounded icon-xs">schedule</span>
-										<span class="md-body-small">
-											{new Date(rental.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-										</span>
-									</div>
-									{#if rental.returnedAt}
-										<div class="time-row returned">
-											<span class="material-symbols-rounded icon-xs">check_circle</span>
-											<span class="md-body-small">
-												{new Date(rental.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-											</span>
-										</div>
-									{/if}
-								</div>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</section>
 
 			<!-- Tour Bookings Section -->
 			{#if data.tourBookings.length > 0}
@@ -1154,7 +1330,7 @@
 
 					<div class="rentals-grid">
 						{#each data.tourBookings as booking}
-							<div class="rental-card tour-card">
+							<button class="rental-card tour-card clickable" onclick={() => openEditTourBooking(booking)} disabled={loading}>
 								<div class="rental-header">
 									<div class="customer-info">
 										<span class="material-symbols-rounded customer-icon tour-icon">tour</span>
@@ -1173,37 +1349,126 @@
 
 								<div class="tour-dates">
 									<div class="tour-date-row">
-										<span class="material-symbols-rounded icon-sm">event</span>
-										<span class="md-body-small">Booked: {new Date(booking.bookedAt).toLocaleDateString()}</span>
-									</div>
-									<div class="tour-date-row">
 										<span class="material-symbols-rounded icon-sm">calendar_today</span>
 										<span class="md-body-small">Activity: {new Date(booking.activityDate).toLocaleDateString()}</span>
 									</div>
 								</div>
 
-								<div class="tour-pricing-row">
-									<span class="md-body-small">Price/person: ${(booking.unitPrice / 100).toFixed(2)}</span>
-								</div>
-
 								<div class="rental-footer">
 									<div class="time-info">
-										<span class="material-symbols-rounded icon-sm">schedule</span>
-										<span class="md-body-small">Created {booking.createdAt ? new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+										<span class="md-body-small">${(booking.unitPrice / 100).toFixed(2)}/person</span>
 									</div>
-									<div class="rental-actions">
-										<md-icon-button onclick={() => promptDeleteTourBooking(booking.id)} disabled={loading} aria-label="Delete booking">
+									<div class="rental-actions" onclick={(e) => e.stopPropagation()}>
+										<md-icon-button onclick={(e: Event) => { e.stopPropagation(); promptDelete('tourBooking', booking.id, booking.productName || 'Booking'); }} disabled={loading} aria-label="Delete booking">
 											<span class="material-symbols-rounded delete-icon">delete</span>
 										</md-icon-button>
-										<md-filled-tonal-button onclick={() => promptCloseTourBooking(booking)} disabled={loading}>
+										<md-filled-tonal-button onclick={(e: Event) => { e.stopPropagation(); promptCloseTourBooking(booking); }} disabled={loading}>
 											<span class="material-symbols-rounded" slot="icon">check_circle</span>
 											Close
 										</md-filled-tonal-button>
 									</div>
 								</div>
+							</button>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
+			<!-- Store Sales Section (current shift) -->
+			{#if data.storeSales.length > 0}
+				<section class="rentals-section store-section">
+					<div class="section-header">
+						<span class="material-symbols-rounded">shopping_cart</span>
+						<h2 class="md-title-large">Store Sales</h2>
+						<span class="count-badge md-label-medium">{data.storeSales.length}</span>
+					</div>
+
+					<div class="store-sales-list">
+						{#each data.storeSales as sale}
+							<div class="store-sale-item">
+								<div class="sale-info">
+									<span class="md-body-medium">{sale.productName || 'Product'}</span>
+									<span class="md-body-small sale-details">
+										{sale.quantity} x ${(sale.unitPrice / 100).toFixed(2)}
+									</span>
+								</div>
+								<span class="md-title-small sale-total">${(sale.total / 100).toFixed(2)}</span>
+								<md-icon-button onclick={() => promptDelete('storeSale', sale.id, sale.productName || 'Sale')} disabled={loading} aria-label="Delete sale">
+									<span class="material-symbols-rounded delete-icon">delete</span>
+								</md-icon-button>
 							</div>
 						{/each}
 					</div>
+				</section>
+			{/if}
+
+			<!-- Previous Shift Rentals Section (collapsible) -->
+			{#if data.previousShiftRentals.length > 0}
+				<section class="rentals-section previous-section">
+					<button class="section-header collapsible" onclick={() => showPreviousRentals = !showPreviousRentals}>
+						<span class="material-symbols-rounded">history</span>
+						<h2 class="md-title-large">Previous Rentals</h2>
+						<span class="count-badge md-label-medium">{data.previousShiftRentals.length}</span>
+						<span class="material-symbols-rounded collapse-icon" class:expanded={showPreviousRentals}>
+							expand_more
+						</span>
+					</button>
+
+					{#if showPreviousRentals}
+						<div class="rentals-grid previous">
+							{#each data.previousShiftRentals as rental}
+								{@const customer = rental.customer as {name?: string, hotel?: string}}
+								{@const items = rental.items as Array<{name: string, quantity?: number, code?: string}>}
+								{@const pricing = rental.pricing as {type?: string, total?: number}}
+								<div class="rental-card completed">
+									<div class="rental-header">
+										<div class="customer-info">
+											<span class="material-symbols-rounded customer-icon">person</span>
+											<div class="customer-details">
+												<span class="md-title-medium">{customer?.name || 'Unknown'}</span>
+												{#if customer?.hotel}
+													<span class="md-body-small hotel-text">
+														<span class="material-symbols-rounded icon-xs">hotel</span>
+														{customer.hotel}
+													</span>
+												{/if}
+											</div>
+										</div>
+										{#if pricing?.total}
+											<div class="price-badge">
+												${Math.round(pricing.total / 100)}
+											</div>
+										{/if}
+									</div>
+
+									<div class="rental-items-list compact">
+										{#each items as item}
+											<span class="item-text md-body-small">
+												{item.name}{item.code ? ` (${item.code})` : ''}{item.quantity ? ` x${item.quantity}` : ''}
+											</span>
+										{/each}
+									</div>
+
+									<div class="rental-times">
+										<div class="time-row">
+											<span class="material-symbols-rounded icon-xs">schedule</span>
+											<span class="md-body-small">
+												{new Date(rental.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+											</span>
+										</div>
+										{#if rental.returnedAt}
+											<div class="time-row returned">
+												<span class="material-symbols-rounded icon-xs">check_circle</span>
+												<span class="md-body-small">
+													{new Date(rental.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+												</span>
+											</div>
+										{/if}
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</section>
 			{/if}
 		</main>
@@ -1211,7 +1476,7 @@
 		<!-- Create Rental Modal -->
 		{#if showForm}
 			<div class="modal-overlay" onclick={resetForm}>
-				<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+				<div class="modal-content large" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 					<div class="modal-header">
 						<div class="modal-title">
 							<span class="material-symbols-rounded">{fromReservationId ? 'event' : 'add_shopping_cart'}</span>
@@ -1469,7 +1734,7 @@
 <!-- Close Shift Modal -->
 {#if showShiftSummary && shiftSummary}
 	<div class="modal-overlay" onclick={() => { showShiftSummary = false; }}>
-		<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content large" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">fact_check</span>
@@ -1634,7 +1899,7 @@
 <!-- Store Sale Modal -->
 {#if showStoreSaleModal}
 	<div class="modal-overlay" onclick={() => { showStoreSaleModal = false; }}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">shopping_cart</span>
@@ -1699,7 +1964,7 @@
 <!-- Tour Booking Modal -->
 {#if showTourBookingModal}
 	<div class="modal-overlay" onclick={closeTourBookingModal}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">tour</span>
@@ -1795,7 +2060,7 @@
 <!-- Close Tour Booking Modal -->
 {#if showCloseTourModal && selectedTourBookingToClose}
 	<div class="modal-overlay" onclick={() => { showCloseTourModal = false; }}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">check_circle</span>
@@ -1915,7 +2180,7 @@
 <!-- Reservation Conflict Override Modal -->
 {#if showConflictModal}
 	<div class="modal-overlay" onclick={() => { showConflictModal = false; }} style="z-index: 300;">
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
@@ -1994,7 +2259,7 @@
 <!-- Create Reservation Modal -->
 {#if showReservationModal}
 	<div class="modal-overlay" onclick={closeReservationModal}>
-		<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content large" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">event</span>
@@ -2249,6 +2514,231 @@
 	onConfirm={executeEndShift}
 />
 
+<!-- Passcode Delete Modal -->
+{#if showDeleteModal && deleteTarget}
+	<div class="modal-overlay" onclick={() => { showDeleteModal = false; }}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+			<div class="modal-header">
+				<div class="modal-title">
+					<span class="material-symbols-rounded" style="color: var(--md-sys-color-error)">delete</span>
+					<h2 class="md-headline-small">Delete {deleteTarget.label}?</h2>
+				</div>
+				<md-icon-button onclick={() => { showDeleteModal = false; }}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
+			</div>
+
+			<div class="modal-body">
+				<p class="md-body-medium">This action requires passcode verification. The item will be marked as deleted but kept in records for the shift report.</p>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">lock</span>
+						<span class="md-title-small">Enter Passcode</span>
+					</label>
+					<input
+						type="password"
+						maxlength="4"
+						inputmode="numeric"
+						placeholder="4-digit passcode"
+						bind:value={deletePasscode}
+						class="passcode-input"
+						onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') executeDelete(); }}
+					/>
+					{#if deleteError}
+						<div class="error-banner">
+							<span class="material-symbols-rounded">error</span>
+							<span class="md-body-medium">{deleteError}</span>
+						</div>
+					{/if}
+				</div>
+			</div>
+
+			<div class="modal-footer">
+				<md-outlined-button onclick={() => { showDeleteModal = false; }} disabled={deleteLoading}>Cancel</md-outlined-button>
+				<md-filled-button class="danger-btn" onclick={executeDelete} disabled={deleteLoading || deletePasscode.length !== 4}>
+					<span class="material-symbols-rounded" slot="icon">delete</span>
+					Delete
+				</md-filled-button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Edit Reservation Modal -->
+{#if showEditReservationModal && editingReservation}
+	<div class="modal-overlay" onclick={() => { showEditReservationModal = false; }}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+			<div class="modal-header">
+				<div class="modal-title">
+					<span class="material-symbols-rounded">event</span>
+					<h2 class="md-headline-small">Edit Reservation</h2>
+				</div>
+				<md-icon-button onclick={() => { showEditReservationModal = false; }}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
+			</div>
+
+			<div class="modal-body">
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">person</span>
+						<span class="md-title-small">Customer</span>
+					</label>
+					<div class="customer-form-grid">
+						<md-outlined-text-field
+							label="Name"
+							value={editResCustomerName}
+							oninput={(e: Event) => editResCustomerName = (e.target as HTMLInputElement).value}
+							disabled={loading}
+						>
+							<span class="material-symbols-rounded" slot="leading-icon">badge</span>
+						</md-outlined-text-field>
+						<md-outlined-text-field
+							label="Hotel"
+							value={editResCustomerHotel}
+							oninput={(e: Event) => editResCustomerHotel = (e.target as HTMLInputElement).value}
+							disabled={loading}
+						>
+							<span class="material-symbols-rounded" slot="leading-icon">hotel</span>
+						</md-outlined-text-field>
+					</div>
+				</div>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">info</span>
+						<span class="md-title-small">Reason</span>
+					</label>
+					<md-outlined-text-field
+						label="Reason"
+						value={editResReason}
+						oninput={(e: Event) => editResReason = (e.target as HTMLInputElement).value}
+						disabled={loading}
+					></md-outlined-text-field>
+				</div>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">calendar_today</span>
+						<span class="md-title-small">Reservation Period</span>
+					</label>
+					<div class="reservation-dates-inputs">
+						<input
+							type="text"
+							class="flatpickr-input form-date-input"
+							placeholder="From..."
+							bind:this={editResFromInput}
+							disabled={loading}
+							readonly
+						/>
+						<input
+							type="text"
+							class="flatpickr-input form-date-input"
+							placeholder="Until..."
+							bind:this={editResUntilInput}
+							disabled={loading}
+							readonly
+						/>
+					</div>
+				</div>
+
+				{#if editResError}
+					<div class="error-banner">
+						<span class="material-symbols-rounded">error</span>
+						<span class="md-body-medium">{editResError}</span>
+					</div>
+				{/if}
+			</div>
+
+			<div class="modal-footer">
+				<md-outlined-button onclick={() => { showEditReservationModal = false; }} disabled={loading}>Cancel</md-outlined-button>
+				<md-filled-button onclick={saveReservationEdit} disabled={loading}>
+					<span class="material-symbols-rounded" slot="icon">check</span>
+					Save Changes
+				</md-filled-button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Edit Tour Booking Modal -->
+{#if showEditTourModal && editingTourBooking}
+	<div class="modal-overlay" onclick={() => { showEditTourModal = false; }}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+			<div class="modal-header">
+				<div class="modal-title">
+					<span class="material-symbols-rounded">tour</span>
+					<h2 class="md-headline-small">Edit Tour Booking</h2>
+				</div>
+				<md-icon-button onclick={() => { showEditTourModal = false; }}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
+			</div>
+
+			<div class="modal-body">
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">category</span>
+						<span class="md-title-small">Tour Product</span>
+					</label>
+					<select class="form-select" bind:value={editTourProductId} disabled={loading}>
+						{#each data.tourProducts as product}
+							<option value={product.id}>{product.name} - ${(product.price / 100).toFixed(2)}/person</option>
+						{/each}
+					</select>
+				</div>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">group</span>
+						<span class="md-title-small">Number of Pax</span>
+					</label>
+					<div class="quantity-control">
+						<button class="qty-btn" onclick={() => editTourPax = Math.max(1, editTourPax - 1)} disabled={loading || editTourPax <= 1} aria-label="Decrease pax">
+							<span class="material-symbols-rounded">remove</span>
+						</button>
+						<span class="qty-value md-title-large">{editTourPax}</span>
+						<button class="qty-btn" onclick={() => editTourPax = Math.min(50, editTourPax + 1)} disabled={loading || editTourPax >= 50} aria-label="Increase pax">
+							<span class="material-symbols-rounded">add</span>
+						</button>
+					</div>
+				</div>
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">calendar_today</span>
+						<span class="md-title-small">Activity Date</span>
+					</label>
+					<input
+						type="text"
+						class="flatpickr-input form-date-input"
+						placeholder="Select activity date..."
+						bind:this={editTourDateInput}
+						disabled={loading}
+						readonly
+					/>
+				</div>
+
+				{#if editTourError}
+					<div class="error-banner">
+						<span class="material-symbols-rounded">error</span>
+						<span class="md-body-medium">{editTourError}</span>
+					</div>
+				{/if}
+			</div>
+
+			<div class="modal-footer">
+				<md-outlined-button onclick={() => { showEditTourModal = false; }} disabled={loading}>Cancel</md-outlined-button>
+				<md-filled-button onclick={saveTourBookingEdit} disabled={loading}>
+					<span class="material-symbols-rounded" slot="icon">check</span>
+					Save Changes
+				</md-filled-button>
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
 	/* App Shell */
 	.app-shell {
@@ -2443,16 +2933,119 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--md-sys-spacing-sm);
-		transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+		transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+			transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+		width: 100%;
+		text-align: left;
+		font: inherit;
+		color: inherit;
 	}
 
-	.rental-card:hover {
+	.rental-card.clickable {
+		cursor: pointer;
+	}
+
+	.rental-card.clickable:hover:not(:disabled) {
+		box-shadow: var(--md-sys-elevation-level2);
+		border-color: var(--md-sys-color-primary);
+	}
+
+	.rental-card.clickable:active:not(:disabled) {
+		transform: scale(0.98);
+		box-shadow: none;
+	}
+
+	.rental-card.clickable:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.rental-card:not(.clickable):hover {
 		box-shadow: var(--md-sys-elevation-level2);
 	}
 
 	.rental-card.completed {
 		opacity: 0.85;
 		background: var(--md-sys-color-surface);
+	}
+
+	/* Collapsible section header */
+	.section-header.collapsible {
+		cursor: pointer;
+		border: none;
+		background: none;
+		width: 100%;
+		text-align: left;
+		font: inherit;
+		color: inherit;
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-xs);
+		border-radius: var(--md-sys-shape-corner-medium);
+		transition: background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.section-header.collapsible:hover {
+		background: var(--md-sys-color-surface-container);
+	}
+
+	.collapse-icon {
+		margin-left: auto;
+		transition: transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.collapse-icon.expanded {
+		transform: rotate(180deg);
+	}
+
+	/* Store sales list */
+	.store-sales-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.store-sale-item {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		background: var(--md-sys-color-surface-container-low);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	.sale-info {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.sale-details {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.sale-total {
+		color: var(--md-sys-color-primary);
+		white-space: nowrap;
+	}
+
+	/* Passcode input */
+	.passcode-input {
+		width: 100%;
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		border: 1px solid var(--md-sys-color-outline);
+		border-radius: var(--md-sys-shape-corner-small);
+		font: var(--md-sys-typescale-title-medium);
+		text-align: center;
+		letter-spacing: 0.5em;
+		background: var(--md-sys-color-surface);
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.passcode-input:focus {
+		outline: none;
+		border-color: var(--md-sys-color-primary);
+		border-width: 2px;
 	}
 
 	.rental-header {
@@ -2694,6 +3287,7 @@
 		max-width: 500px;
 		width: 100%;
 		max-height: 90vh;
+		max-height: 90dvh;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -3224,13 +3818,13 @@
 	}
 
 	.cash-match {
-		background: #e8f5e9;
-		color: #2e7d32;
+		background: var(--md-sys-color-success-container);
+		color: var(--md-sys-color-on-success-container);
 	}
 
 	.cash-over {
-		background: #fff3e0;
-		color: #e65100;
+		background: var(--md-sys-color-warning-container);
+		color: var(--md-sys-color-on-warning-container);
 	}
 
 	.cash-short {
@@ -3461,8 +4055,18 @@
 			flex-direction: column;
 		}
 
+		.modal-content,
 		.modal-content.large {
 			max-width: 100%;
+			max-height: 95vh;
+			max-height: 95dvh;
+			border-radius: var(--md-sys-shape-corner-large) var(--md-sys-shape-corner-large) 0 0;
+			margin-top: auto;
+		}
+
+		.modal-overlay {
+			align-items: flex-end;
+			padding: 0;
 		}
 
 		.reservation-dates-inputs {
