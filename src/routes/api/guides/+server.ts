@@ -24,7 +24,7 @@ export const GET: RequestHandler = async () => {
 
 			if (lastCompleted) {
 				const cooldownEnd = new Date(lastCompleted.returnedAt!);
-				cooldownEnd.setMinutes(cooldownEnd.getMinutes() + guide.cooldownMinutes);
+				cooldownEnd.setMinutes(cooldownEnd.getMinutes() + (guide.cooldownMinutes ?? 30));
 				const now = new Date();
 				inCooldown = now < cooldownEnd;
 				minutesRemaining = Math.ceil((cooldownEnd.getTime() - now.getTime()) / 60000);

@@ -85,7 +85,7 @@
 		loading = false;
 	}
 
-	async function toggleActive(id: number, isActive: boolean) {
+	async function toggleActive(id: number, isActive: boolean | null) {
 		loading = true;
 		error = '';
 
@@ -261,7 +261,7 @@
 										/>
 										{#if product.quantity === 0}
 											<span class="out-of-stock">Out of stock</span>
-										{:else if product.quantity <= 5}
+										{:else if (product.quantity ?? 0) <= 5}
 											<span class="low-stock">Low</span>
 										{/if}
 									</div>

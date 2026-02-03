@@ -223,7 +223,7 @@ export const POST: RequestHandler = async ({ cookies }) => {
 	salesData.push({
 		'Product': '',
 		'Quantity': '' as any,
-		'Unit Price ($)': 'TOTALS:',
+		'Unit Price ($)': 'TOTALS:' as any,
 		'Total ($)': Math.round(salesRevenue / 100),
 		'Time': `${shiftSales.length} sales`
 	});
@@ -245,7 +245,7 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		tourData.push({
 			'Tour': 'TOTALS',
 			'Pax': shiftTourBookings.reduce((sum, b) => sum + b.pax, 0),
-			'Price/Person ($)': '',
+			'Price/Person ($)': '' as any,
 			'Revenue ($)': Math.round(tourRevenue / 100),
 			'Cost ($)': Math.round(tourCost / 100),
 			'Profit ($)': Math.round((tourRevenue - tourCost) / 100),

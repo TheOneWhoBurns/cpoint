@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { rentalProducts, rentals, trackedItems, productTypes, guides, storeProducts, shifts, operators, tourAgencyProducts, tourBookings, reservations } from '$lib/server/db/schema';
 import { eq, and, isNull, ne } from 'drizzle-orm';
+import type { Rental } from '$lib/server/db/schema';
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	const products = await db.select().from(rentalProducts).where(eq(rentalProducts.isActive, true));
@@ -17,9 +18,23 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		.where(eq(reservations.status, 'active'));
 
 	const operatorIdStr = cookies.get('operatorId');
-	let activeRentals = [];
-	let previousShiftRentals = [];
-	let activeTourBookings: Array<Record<string, unknown>> = [];
+	let activeRentals: Rental[] = [];
+	let previousShiftRentals: Rental[] = [];
+	let activeTourBookings: Array<{
+		id: number;
+		shiftId: number | null;
+		tourProductId: number | null;
+		guideId: number | null;
+		pax: number;
+		unitPrice: number;
+		totalPrice: number;
+		cost: number | null;
+		bookedAt: Date;
+		activityDate: Date;
+		status: string;
+		createdAt: Date | null;
+		productName: string | null;
+	}> = [];
 
 	if (operatorIdStr) {
 		const operatorId = parseInt(operatorIdStr);

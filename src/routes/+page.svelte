@@ -311,11 +311,11 @@
 		}
 	}
 
-	function formatReservationDate(date: string): string {
+	function formatReservationDate(date: string | Date): string {
 		return new Date(date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 	}
 
-	function isReservationExpired(until: string): boolean {
+	function isReservationExpired(until: string | Date): boolean {
 		return new Date(until) < new Date();
 	}
 
@@ -843,7 +843,7 @@
 		selectedRentalToClose = null;
 	}
 
-	function getElapsedTime(startedAt: string): string {
+	function getElapsedTime(startedAt: string | Date): string {
 		const start = new Date(startedAt);
 		const now = new Date();
 		const diff = Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
@@ -1055,7 +1055,7 @@
 								<div class="rental-footer">
 									<div class="time-info">
 										<span class="material-symbols-rounded icon-sm">schedule</span>
-										<span class="md-body-small">Created {new Date(reservation.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+										<span class="md-body-small">Created {reservation.createdAt ? new Date(reservation.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
 									</div>
 									<div class="rental-actions">
 										<md-icon-button onclick={() => cancelReservation(reservation.id)} disabled={loading} aria-label="Cancel reservation">
@@ -1189,7 +1189,7 @@
 								<div class="rental-footer">
 									<div class="time-info">
 										<span class="material-symbols-rounded icon-sm">schedule</span>
-										<span class="md-body-small">Created {new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+										<span class="md-body-small">Created {booking.createdAt ? new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
 									</div>
 									<div class="rental-actions">
 										<md-icon-button onclick={() => promptDeleteTourBooking(booking.id)} disabled={loading} aria-label="Delete booking">
