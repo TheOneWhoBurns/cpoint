@@ -25,24 +25,18 @@ export const GET: RequestHandler = async ({ url }) => {
 		return json({ error: 'Invalid shift ID' }, { status: 400 });
 	}
 
-	const [shift] = await db
-		.select()
-		.from(shifts)
-		.where(eq(shifts.id, shiftId));
+	// Run all shift data queries in parallel
+	const [shiftResult, shiftRentals, shiftSalesData, shiftTourBookings] = await Promise.all([
+		db.select().from(shifts).where(eq(shifts.id, shiftId)),
+		db.select().from(rentals).where(eq(rentals.shiftId, shiftId)),
+		db.select().from(storeSales).where(eq(storeSales.shiftId, shiftId)),
+		db.select().from(tourBookings).where(eq(tourBookings.shiftId, shiftId))
+	]);
 
+	const [shift] = shiftResult;
 	if (!shift) {
 		return json({ error: 'Shift not found' }, { status: 404 });
 	}
-
-	const shiftRentals = await db
-		.select()
-		.from(rentals)
-		.where(eq(rentals.shiftId, shiftId));
-
-	const shiftSalesData = await db
-		.select()
-		.from(storeSales)
-		.where(eq(storeSales.shiftId, shiftId));
 
 	let rentalsCash = 0;
 	let rentalsCredit = 0;
@@ -65,11 +59,6 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	const storeSalesTotal = Math.round(shiftSalesData.reduce((sum, s) => sum + s.total, 0) / 100);
-
-	const shiftTourBookings = await db
-		.select()
-		.from(tourBookings)
-		.where(eq(tourBookings.shiftId, shiftId));
 
 	const tourRevenue = shiftTourBookings.reduce((sum, b) => sum + b.totalPrice, 0) / 100;
 	const tourCost = shiftTourBookings.reduce((sum, b) => sum + (b.cost ?? 0), 0) / 100;

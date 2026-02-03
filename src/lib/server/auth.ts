@@ -33,6 +33,17 @@ const attempts = new Map<string, { count: number; resetAt: number }>();
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
+// Periodically purge expired entries to prevent unbounded memory growth
+setInterval(() => {
+	const now = Date.now();
+	for (const [key, entry] of attempts) {
+		if (now >= entry.resetAt) {
+			attempts.delete(key);
+		}
+	}
+}, CLEANUP_INTERVAL_MS).unref();
 
 export function checkRateLimit(key: string): { allowed: boolean; retryAfterSeconds?: number } {
 	const now = Date.now();
