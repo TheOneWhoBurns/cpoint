@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { rentals, trackedItems, productTypes, rentalProducts, guides, payments, reservations, operators } from '$lib/server/db/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { verifyPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
@@ -134,29 +134,20 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 			if (conflicts.length > 0) {
 				if (overrideReservationIds && operatorPasscode) {
-					let overrideValid = false;
-
-					if (overrideOperatorId) {
-						const [op] = await db
-							.select()
-							.from(operators)
-							.where(eq(operators.id, overrideOperatorId));
-						if (op && op.isActive) {
-							overrideValid = await verifyPasscode(operatorPasscode, op.passcode);
-						}
-					} else {
-						const allOperators = await db
-							.select()
-							.from(operators)
-							.where(eq(operators.isActive, true));
-						for (const op of allOperators) {
-							if (await verifyPasscode(operatorPasscode, op.passcode)) {
-								overrideValid = true;
-								break;
-							}
-						}
+					if (!overrideOperatorId) {
+						return json({ error: 'Operator ID required for reservation override' }, { status: 400 });
 					}
 
+					const [op] = await db
+						.select()
+						.from(operators)
+						.where(and(eq(operators.id, overrideOperatorId), eq(operators.isActive, true), eq(operators.isAdmin, true)));
+
+					if (!op) {
+						return json({ error: 'Operator not found or not authorized to override' }, { status: 403 });
+					}
+
+					const overrideValid = await verifyPasscode(operatorPasscode, op.passcode);
 					if (!overrideValid) {
 						return json({ error: 'Invalid passcode for reservation override' }, { status: 403 });
 					}
