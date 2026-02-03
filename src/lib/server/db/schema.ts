@@ -16,7 +16,9 @@ export const shifts = pgTable('shifts', {
 	endedAt: timestamp('ended_at', { withTimezone: true }),
 	summary: jsonb('summary'),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
-});
+}, (table) => [
+	index('idx_shifts_operator_ended').on(table.operatorId, table.endedAt)
+]);
 
 export const productTypes = pgTable('product_types', {
 	id: serial('id').primaryKey(),
@@ -68,7 +70,8 @@ export const rentals = pgTable('rentals', {
 }, (table) => [
 	index('idx_rentals_status').on(table.status),
 	index('idx_rentals_shift').on(table.shiftId),
-	index('idx_rentals_dates').on(table.startedAt, table.returnedAt)
+	index('idx_rentals_dates').on(table.startedAt, table.returnedAt),
+	index('idx_rentals_guide').on(table.guideId)
 ]);
 
 export const equipmentBlocks = pgTable('equipment_blocks', {

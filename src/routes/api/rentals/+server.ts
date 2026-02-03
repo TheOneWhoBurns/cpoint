@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { rentals, trackedItems, productTypes, rentalProducts, guides, payments, reservations, operators } from '$lib/server/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 interface ReservationItem {
@@ -144,52 +144,54 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 	}
 
-	for (const item of items) {
-		if (item.type === 'tracked') {
-			await db
-				.update(trackedItems)
-				.set({ status: 'rented' })
-				.where(eq(trackedItems.id, item.itemId));
-		} else if (item.type === 'generic') {
-			const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
-			if (cat) {
-				await db
+	const productPricing = product.pricing as { hourly?: number; fullDay?: number };
+
+	// Wrap all inventory mutations + rental insert in a transaction
+	const created = await db.transaction(async (tx) => {
+		for (const item of items) {
+			if (item.type === 'tracked') {
+				await tx
+					.update(trackedItems)
+					.set({ status: 'rented' })
+					.where(eq(trackedItems.id, item.itemId));
+			} else if (item.type === 'generic') {
+				await tx
 					.update(productTypes)
-					.set({ availableQuantity: (cat.availableQuantity ?? 0) - (item.quantity || 1) })
+					.set({ availableQuantity: sql`${productTypes.availableQuantity} - ${item.quantity || 1}` })
 					.where(eq(productTypes.id, item.categoryId));
 			}
 		}
-	}
 
-	const productPricing = product.pricing as { hourly?: number; fullDay?: number };
-
-	const [created] = await db
-		.insert(rentals)
-		.values({
-			shiftId,
-			customer,
-			items,
-			pricing: {
-				type: rentalType,
-				hourly: productPricing.hourly,
-				fullDay: productPricing.fullDay
-			},
-			quantity,
-			guideId: guideId || null,
-			status: 'active'
-		})
-		.returning();
-
-	// If fulfilling from a reservation, mark it as fulfilled
-	if (fromReservationId) {
-		await db
-			.update(reservations)
-			.set({
-				status: 'fulfilled',
-				fulfilledByRentalId: created.id
+		const [rental] = await tx
+			.insert(rentals)
+			.values({
+				shiftId,
+				customer,
+				items,
+				pricing: {
+					type: rentalType,
+					hourly: productPricing.hourly,
+					fullDay: productPricing.fullDay
+				},
+				quantity,
+				guideId: guideId || null,
+				status: 'active'
 			})
-			.where(eq(reservations.id, fromReservationId));
-	}
+			.returning();
+
+		// If fulfilling from a reservation, mark it as fulfilled
+		if (fromReservationId) {
+			await tx
+				.update(reservations)
+				.set({
+					status: 'fulfilled',
+					fulfilledByRentalId: rental.id
+				})
+				.where(eq(reservations.id, fromReservationId));
+		}
+
+		return rental;
+	});
 
 	return json(created, { status: 201 });
 };
@@ -295,12 +297,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 				const newQty = newGenericMap.get(catId) || 0;
 				const diff = newQty - oldQty;
 				if (diff !== 0) {
-					const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, catId));
-					if (cat) {
-						await db.update(productTypes)
-							.set({ availableQuantity: (cat.availableQuantity ?? 0) - diff })
-							.where(eq(productTypes.id, catId));
-					}
+					await db.update(productTypes)
+						.set({ availableQuantity: sql`${productTypes.availableQuantity} - ${diff}` })
+						.where(eq(productTypes.id, catId));
 				}
 			}
 
@@ -396,45 +395,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			return json({ error: 'Payment amounts do not match final price' }, { status: 400 });
 		}
 
-		for (const item of rentalItems) {
-			if (item.type === 'tracked' && item.itemId) {
-				await db
-					.update(trackedItems)
-					.set({ status: 'available' })
-					.where(eq(trackedItems.id, item.itemId));
-			} else if (item.type === 'generic' && item.categoryId) {
-				const [cat] = await db
-					.select()
-					.from(productTypes)
-					.where(eq(productTypes.id, item.categoryId));
-				if (cat) {
-					const newAvailable = (cat.availableQuantity ?? 0) + (item.quantity || 1);
-					await db
-						.update(productTypes)
-						.set({ availableQuantity: newAvailable })
-						.where(eq(productTypes.id, item.categoryId));
-				}
-			}
-		}
-
-		// Insert payment records for cash and credit separately if amounts > 0
-		if (cashAmount > 0) {
-			await db.insert(payments).values({
-				shiftId: currentShiftId,
-				rentalId: id,
-				amount: Math.round(cashAmount * 100), // Convert to cents
-				method: 'cash'
-			});
-		}
-		if (creditAmount > 0) {
-			await db.insert(payments).values({
-				shiftId: currentShiftId,
-				rentalId: id,
-				amount: Math.round(creditAmount * 100), // Convert to cents
-				method: 'credit'
-			});
-		}
-
 		// Build updated pricing object with all payment details
 		const updatedPricing = {
 			...pricing,
@@ -448,16 +408,53 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			paymentMethod: cashAmount > 0 && creditAmount > 0 ? 'split' : (creditAmount > 0 ? 'credit' : 'cash')
 		};
 
-		const [updated] = await db
-			.update(rentals)
-			.set({
-				status: 'completed',
-				returnedAt: new Date(),
-				returnNotes: returnData ? JSON.stringify(returnData) : null,
-				pricing: updatedPricing
-			})
-			.where(eq(rentals.id, id))
-			.returning();
+		// Wrap inventory return + payment + rental update in a transaction
+		const updated = await db.transaction(async (tx) => {
+			for (const item of rentalItems) {
+				if (item.type === 'tracked' && item.itemId) {
+					await tx
+						.update(trackedItems)
+						.set({ status: 'available' })
+						.where(eq(trackedItems.id, item.itemId));
+				} else if (item.type === 'generic' && item.categoryId) {
+					await tx
+						.update(productTypes)
+						.set({ availableQuantity: sql`${productTypes.availableQuantity} + ${item.quantity || 1}` })
+						.where(eq(productTypes.id, item.categoryId));
+				}
+			}
+
+			// Insert payment records for cash and credit separately if amounts > 0
+			if (cashAmount > 0) {
+				await tx.insert(payments).values({
+					shiftId: currentShiftId,
+					rentalId: id,
+					amount: Math.round(cashAmount * 100),
+					method: 'cash'
+				});
+			}
+			if (creditAmount > 0) {
+				await tx.insert(payments).values({
+					shiftId: currentShiftId,
+					rentalId: id,
+					amount: Math.round(creditAmount * 100),
+					method: 'credit'
+				});
+			}
+
+			const [result] = await tx
+				.update(rentals)
+				.set({
+					status: 'completed',
+					returnedAt: new Date(),
+					returnNotes: returnData ? JSON.stringify(returnData) : null,
+					pricing: updatedPricing
+				})
+				.where(eq(rentals.id, id))
+				.returning();
+
+			return result;
+		});
 
 		return json(updated);
 	}

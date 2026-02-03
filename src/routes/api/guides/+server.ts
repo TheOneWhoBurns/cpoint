@@ -1,43 +1,48 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { guides, rentals } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, isNotNull, desc, sql } from 'drizzle-orm';
 import { hashPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
 	const allGuides = await db.select().from(guides).orderBy(guides.name);
 
-	const guidesWithStatus = await Promise.all(
-		allGuides.map(async (guide) => {
-			const lastRentals = await db
-				.select()
-				.from(rentals)
-				.where(eq(rentals.guideId, guide.id));
-
-			const lastCompleted = lastRentals
-				.filter(r => r.returnedAt)
-				.sort((a, b) => new Date(b.returnedAt!).getTime() - new Date(a.returnedAt!).getTime())[0];
-
-			let inCooldown = false;
-			let minutesRemaining = 0;
-
-			if (lastCompleted) {
-				const cooldownEnd = new Date(lastCompleted.returnedAt!);
-				cooldownEnd.setMinutes(cooldownEnd.getMinutes() + (guide.cooldownMinutes ?? 30));
-				const now = new Date();
-				inCooldown = now < cooldownEnd;
-				minutesRemaining = Math.ceil((cooldownEnd.getTime() - now.getTime()) / 60000);
-			}
-
-			return {
-				...guide,
-				inCooldown,
-				minutesRemaining,
-				lastRentalEnd: lastCompleted?.returnedAt || null
-			};
+	// Single query: get the most recent completed rental per guide (instead of N+1)
+	const lastReturns = await db
+		.select({
+			guideId: rentals.guideId,
+			returnedAt: sql<Date>`max(${rentals.returnedAt})`.as('last_returned')
 		})
-	);
+		.from(rentals)
+		.where(isNotNull(rentals.returnedAt))
+		.groupBy(rentals.guideId);
+
+	const returnMap = new Map(lastReturns.map(r => [r.guideId, r.returnedAt]));
+
+	const now = new Date();
+	const guidesWithStatus = allGuides.map((guide) => {
+		const lastReturnedAt = returnMap.get(guide.id) ?? null;
+
+		let inCooldown = false;
+		let minutesRemaining = 0;
+
+		if (lastReturnedAt) {
+			const cooldownEnd = new Date(lastReturnedAt);
+			cooldownEnd.setMinutes(cooldownEnd.getMinutes() + (guide.cooldownMinutes ?? 30));
+			inCooldown = now < cooldownEnd;
+			minutesRemaining = inCooldown
+				? Math.ceil((cooldownEnd.getTime() - now.getTime()) / 60000)
+				: 0;
+		}
+
+		return {
+			...guide,
+			inCooldown,
+			minutesRemaining,
+			lastRentalEnd: lastReturnedAt
+		};
+	});
 
 	return json(guidesWithStatus);
 };
