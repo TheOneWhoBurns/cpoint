@@ -65,7 +65,19 @@
 		error = '';
 		success = '';
 		try {
-			const body: Record<string, string> = { clientId: clientId.trim(), origin: origin.trim() };
+			const trimmedClientId = clientId.trim();
+			const trimmedOrigin = origin.trim();
+			if (!trimmedClientId) {
+				error = 'Client ID is required.';
+				savingCreds = false;
+				return;
+			}
+			if (!trimmedOrigin) {
+				error = 'Origin URL is required.';
+				savingCreds = false;
+				return;
+			}
+			const body: Record<string, string> = { clientId: trimmedClientId, origin: trimmedOrigin };
 			if (clientSecret.trim()) {
 				body.clientSecret = clientSecret.trim();
 			} else if (!data.savedCredentials?.hasSecret) {
@@ -180,7 +192,7 @@
 					></md-outlined-text-field>
 					<div class="credentials-actions">
 						<md-filled-button
-							disabled={savingCreds || !clientId.trim()}
+							disabled={savingCreds || !clientId.trim() || !origin.trim()}
 							onclick={handleSaveCredentials}
 						>
 							<span class="material-symbols-rounded" slot="icon">save</span>

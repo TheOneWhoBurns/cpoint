@@ -5,21 +5,23 @@ import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
-	const { clientId, clientSecret, origin } = await request.json();
+	const payload = await request.json();
+	const clientId = typeof payload.clientId === 'string' ? payload.clientId.trim() : '';
+	const clientSecret = typeof payload.clientSecret === 'string' ? payload.clientSecret.trim() : '';
+	const origin = typeof payload.origin === 'string' ? payload.origin.trim() : '';
 
 	if (!clientId) {
 		return json({ error: 'Client ID is required.' }, { status: 400 });
 	}
 
-	// If no new secret provided, keep the existing one from DB
-	let resolvedSecret = clientSecret?.trim() || '';
+	let resolvedSecret = clientSecret;
 	if (!resolvedSecret) {
 		const [existing] = await db
 			.select()
 			.from(appSettings)
 			.where(eq(appSettings.key, 'google_oauth_credentials'));
 		const existingCreds = existing?.value as { clientSecret?: string } | null;
-		resolvedSecret = existingCreds?.clientSecret || '';
+		resolvedSecret = typeof existingCreds?.clientSecret === 'string' ? existingCreds.clientSecret : '';
 	}
 
 	if (!resolvedSecret) {
@@ -27,9 +29,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	const credentials = {
-		clientId: clientId.trim(),
+		clientId,
 		clientSecret: resolvedSecret,
-		origin: origin?.trim() || ''
+		origin
 	};
 
 	await db
@@ -44,7 +46,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			set: { value: credentials, updatedAt: new Date() }
 		});
 
-	// Clear cached OAuth client so new credentials are picked up
 	const { clearOAuthCache } = await import('$lib/server/google-sheets');
 	clearOAuthCache();
 
