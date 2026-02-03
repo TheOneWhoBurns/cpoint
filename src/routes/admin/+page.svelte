@@ -35,6 +35,12 @@
 			icon: 'warehouse',
 			title: 'Inventory',
 			description: 'View current stock and item status'
+		},
+		{
+			href: '/admin/settings',
+			icon: 'settings',
+			title: 'Settings',
+			description: 'Google Sheets integration and app configuration'
 		}
 	];
 </script>

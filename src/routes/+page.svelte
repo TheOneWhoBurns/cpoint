@@ -521,13 +521,25 @@
 		try {
 			const res = await fetch('/api/shifts/close', { method: 'POST' });
 			if (res.ok) {
-				const blob = await res.blob();
-				const url = window.URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				a.download = `shift-report-${new Date().toISOString().split('T')[0]}.xlsx`;
-				a.click();
-				window.URL.revokeObjectURL(url);
+				const contentType = res.headers.get('Content-Type') || '';
+				if (contentType.includes('application/json')) {
+					// Google Sheets response
+					const data = await res.json();
+					if (data.url) {
+						window.open(data.url, '_blank');
+					} else {
+						error = 'Google Sheets export succeeded but no URL was returned';
+					}
+				} else {
+					// Excel file download fallback
+					const blob = await res.blob();
+					const url = window.URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = `shift-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+					a.click();
+					window.URL.revokeObjectURL(url);
+				}
 				shiftStore.clearSession();
 				await invalidateAll();
 			} else {
@@ -1610,13 +1622,9 @@
 
 			<div class="modal-footer">
 				<md-outlined-button onclick={() => { showShiftSummary = false; }}>Cancel</md-outlined-button>
-				<md-filled-button
-					class="danger-btn"
-					disabled={shiftSummary.activeRentalsCount > 0}
-					onclick={() => { showShiftSummary = false; executeEndShift(); }}
-				>
-					<span class="material-symbols-rounded" slot="icon">download</span>
-					End Shift & Download Report
+				<md-filled-button class="danger-btn" onclick={() => { showShiftSummary = false; executeEndShift(); }}>
+					<span class="material-symbols-rounded" slot="icon">assignment</span>
+					End Shift & Export Report
 				</md-filled-button>
 			</div>
 		</div>

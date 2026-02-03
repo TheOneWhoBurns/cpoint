@@ -10,6 +10,7 @@ export const GET: RequestHandler = async () => {
 			id: operators.id,
 			name: operators.name,
 			isActive: operators.isActive,
+			isAdmin: operators.isAdmin,
 			createdAt: operators.createdAt
 		})
 		.from(operators);
@@ -18,7 +19,7 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
-	const { name, passcode } = await request.json();
+	const { name, passcode, isAdmin } = await request.json();
 
 	if (!name || !passcode) {
 		return json({ error: 'Name and passcode required' }, { status: 400 });
@@ -30,11 +31,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const [newOperator] = await db
 		.insert(operators)
-		.values({ name, passcode })
+		.values({ name, passcode, isAdmin: isAdmin || false })
 		.returning({
 			id: operators.id,
 			name: operators.name,
 			isActive: operators.isActive,
+			isAdmin: operators.isAdmin,
 			createdAt: operators.createdAt
 		});
 
@@ -42,21 +44,34 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
-	const { id, isActive } = await request.json();
+	const { id, isActive, isAdmin } = await request.json();
 
 	if (!id) {
 		return json({ error: 'Operator ID required' }, { status: 400 });
 	}
 
+	const updateData: Record<string, unknown> = {};
+	if (isActive !== undefined) updateData.isActive = isActive;
+	if (isAdmin !== undefined) updateData.isAdmin = isAdmin;
+
+	if (Object.keys(updateData).length === 0) {
+		return json({ error: 'No fields to update' }, { status: 400 });
+	}
+
 	const [updated] = await db
 		.update(operators)
-		.set({ isActive })
+		.set(updateData)
 		.where(eq(operators.id, id))
 		.returning({
 			id: operators.id,
 			name: operators.name,
-			isActive: operators.isActive
+			isActive: operators.isActive,
+			isAdmin: operators.isAdmin
 		});
+
+	if (!updated) {
+		return json({ error: 'Operator not found' }, { status: 404 });
+	}
 
 	return json(updated);
 };

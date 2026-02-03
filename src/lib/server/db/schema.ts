@@ -5,6 +5,7 @@ export const operators = pgTable('operators', {
 	name: text('name').notNull(),
 	passcode: text('passcode').notNull(),
 	isActive: boolean('is_active').default(true),
+	isAdmin: boolean('is_admin').default(false),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
 
@@ -217,8 +218,17 @@ export type StoreProduct = typeof storeProducts.$inferSelect;
 export type NewStoreProduct = typeof storeProducts.$inferInsert;
 export type StoreSale = typeof storeSales.$inferSelect;
 export type NewStoreSale = typeof storeSales.$inferInsert;
+export const appSettings = pgTable('app_settings', {
+	id: serial('id').primaryKey(),
+	key: text('key').unique().notNull(),
+	value: jsonb('value'),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
+});
+
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
+export type AppSetting = typeof appSettings.$inferSelect;
+export type NewAppSetting = typeof appSettings.$inferInsert;
 export type TourAgencyProduct = typeof tourAgencyProducts.$inferSelect;
 export type NewTourAgencyProduct = typeof tourAgencyProducts.$inferInsert;
 export type TourBooking = typeof tourBookings.$inferSelect;

@@ -3,6 +3,7 @@ import { shifts, rentals, operators, storeSales, storeProducts, tourBookings, to
 import { eq, and, isNull } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import * as XLSX from 'xlsx';
+import { isGoogleConnected, createSpreadsheet } from '$lib/server/google-sheets';
 
 interface RentalItem {
 	name: string;
@@ -264,13 +265,55 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		{ 'Category': 'GRAND TOTAL', 'Cash ($)': (cashTotal + storeSalesCash + Math.round(tourRevenue / 100)), 'Credit ($)': (creditTotal + storeSalesCredit), 'Unpaid ($)': unpaidTotal, 'Total ($)': Math.round(finalTotal + salesRevenue / 100 + tourRevenue / 100) },
 	];
 
+	const safeName = (operator?.name || String(operatorId)).replace(/[^a-zA-Z0-9_-]/g, '_');
+	const filename = `shift-${safeName}-${new Date().toISOString().split('T')[0]}`;
+
+	// Try Google Sheets export if connected
+	const googleConnected = await isGoogleConnected();
+	if (googleConnected) {
+		try {
+			const summaryHeaders = Object.keys(summaryData[0]);
+			const summaryRows = summaryData.map(row => Object.values(row));
+
+			const rentalHeaders = Object.keys(excelData[0]);
+			const rentalRows = excelData.map(row => Object.values(row));
+
+			const sheets = [
+				{ name: 'Summary', headers: summaryHeaders, rows: summaryRows },
+				{ name: 'Rentals', headers: rentalHeaders, rows: rentalRows }
+			];
+
+			if (shiftSales.length > 0) {
+				const salesHeaders = Object.keys(salesData[0]);
+				const salesRows = salesData.map(row => Object.values(row));
+				sheets.push({ name: 'Store Sales', headers: salesHeaders, rows: salesRows });
+			}
+
+			if (shiftTourBookings.length > 0) {
+				const tourHeaders = Object.keys(tourData[0]);
+				const tourRows = tourData.map(row => Object.values(row));
+				sheets.push({ name: 'Tour Agency', headers: tourHeaders, rows: tourRows });
+			}
+
+			const url = await createSpreadsheet(filename, sheets);
+
+			cookies.delete('operatorId', { path: '/' });
+
+			return new Response(JSON.stringify({ type: 'google_sheets', url }), {
+				headers: { 'Content-Type': 'application/json' }
+			});
+		} catch (e) {
+			console.error('Google Sheets export failed, falling back to Excel:', e);
+			// Fall through to Excel export
+		}
+	}
+
+	// Excel fallback
 	const wb = XLSX.utils.book_new();
 
-	// Add Summary sheet first
 	const wsSummary = XLSX.utils.json_to_sheet(summaryData);
 	XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-	// Add Rentals sheet
 	const ws = XLSX.utils.json_to_sheet(excelData);
 	XLSX.utils.book_append_sheet(wb, ws, 'Rentals');
 
@@ -288,12 +331,10 @@ export const POST: RequestHandler = async ({ cookies }) => {
 
 	cookies.delete('operatorId', { path: '/' });
 
-	const filename = `shift-${operator?.name || operatorId}-${new Date().toISOString().split('T')[0]}.xlsx`;
-
 	return new Response(buffer, {
 		headers: {
 			'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			'Content-Disposition': `attachment; filename="${filename}"`
+			'Content-Disposition': `attachment; filename="${filename}.xlsx"`
 		}
 	});
 };

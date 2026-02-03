@@ -195,7 +195,7 @@
 					Cancel
 				</md-text-button>
 			</a>
-			<a href="/admin" class="admin-link">
+			<a href="/admin/login" class="admin-link">
 				<md-text-button>
 					<span class="material-symbols-rounded" slot="icon">admin_panel_settings</span>
 					Admin Panel
