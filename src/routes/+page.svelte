@@ -396,7 +396,7 @@
 		editRentalModalOpen = true;
 	}
 
-	async function executeEditRental(updateData: { customer: object; rentalType: string; notes: string }) {
+	async function executeEditRental(updateData: { customer: object; rentalType: string; notes: string; items?: any[]; guideId?: number | null }) {
 		if (!selectedRentalToEdit) return;
 		loading = true;
 		try {
@@ -408,17 +408,20 @@
 					action: 'edit',
 					customer: updateData.customer,
 					rentalType: updateData.rentalType,
-					notes: updateData.notes
+					notes: updateData.notes,
+					items: updateData.items,
+					guideId: updateData.guideId
 				})
 			});
 			if (res.ok) {
 				await invalidateAll();
 			} else {
 				const d = await res.json();
-				error = d.error || 'Failed to update rental';
+				throw new Error(d.error || 'Failed to update rental');
 			}
-		} catch {
-			error = 'Network error updating rental';
+		} catch (e) {
+			if (e instanceof Error) throw e;
+			throw new Error('Network error updating rental');
 		} finally {
 			loading = false;
 			selectedRentalToEdit = null;
@@ -1374,8 +1377,12 @@
 <EditRentalModal
 	bind:open={editRentalModalOpen}
 	rental={selectedRentalToEdit}
+	trackedItems={data.trackedItems}
+	categories={data.categories}
+	guides={data.guides}
 	onSave={executeEditRental}
 	onCancel={() => { editRentalModalOpen = false; }}
+	onVerifyPin={verifyGuidePin}
 />
 
 <ConfirmModal
