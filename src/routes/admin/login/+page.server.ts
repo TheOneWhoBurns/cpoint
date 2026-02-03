@@ -29,5 +29,5 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		.from(operators)
 		.where(and(eq(operators.isActive, true), eq(operators.isAdmin, true)));
 
-	return { adminOperators };
+	return { adminOperators, needsSetup: adminOperators.length === 0 };
 };

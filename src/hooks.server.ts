@@ -26,6 +26,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 
 	if (isAdminApiRoute(pathname)) {
+		// Bootstrap mode: allow creating the first admin operator when none exist
+		if (pathname === '/api/operators' && event.request.method === 'POST') {
+			const adminCount = await db
+				.select({ id: operators.id })
+				.from(operators)
+				.where(and(eq(operators.isAdmin, true), eq(operators.isActive, true)));
+			if (adminCount.length === 0) {
+				return resolve(event);
+			}
+		}
+
 		const token = event.cookies.get('adminSession');
 		if (!token) {
 			return new Response(JSON.stringify({ error: 'Admin authentication required' }), {

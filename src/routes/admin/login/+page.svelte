@@ -12,6 +12,52 @@
 	let error = $state('');
 	let loading = $state(false);
 
+	// Bootstrap setup state
+	let setupName = $state('');
+	let setupPasscode = $state('');
+	let setupConfirm = $state('');
+	let setupError = $state('');
+	let setupLoading = $state(false);
+
+	async function handleSetup() {
+		if (!setupName.trim()) {
+			setupError = 'Name is required';
+			return;
+		}
+		if (setupPasscode.length !== 4 || !/^\d+$/.test(setupPasscode)) {
+			setupError = 'Passcode must be exactly 4 digits';
+			return;
+		}
+		if (setupPasscode !== setupConfirm) {
+			setupError = 'Passcodes do not match';
+			return;
+		}
+
+		setupLoading = true;
+		setupError = '';
+
+		try {
+			const response = await fetch('/api/operators', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: setupName.trim(), passcode: setupPasscode, isAdmin: true })
+			});
+
+			if (!response.ok) {
+				const result = await response.json();
+				setupError = result.error || 'Failed to create admin';
+				setupLoading = false;
+				return;
+			}
+
+			// Reload page to show the login form with the new admin
+			window.location.reload();
+		} catch {
+			setupError = 'Connection error';
+			setupLoading = false;
+		}
+	}
+
 	async function handleLogin() {
 		if (!selectedAdmin) {
 			error = 'Please select an admin';
@@ -76,7 +122,65 @@
 			<p class="md-body-medium subtitle">Select your admin profile and enter your passcode</p>
 		</header>
 
-		{#if data.adminOperators.length === 0}
+		{#if data.needsSetup}
+			<section class="setup-section">
+				<div class="section-header">
+					<span class="material-symbols-rounded">shield_person</span>
+					<h2 class="md-title-medium">Initial Setup</h2>
+				</div>
+				<p class="md-body-medium setup-desc">No admin operators exist. Create the first admin to get started.</p>
+
+				<div class="setup-fields">
+					<md-outlined-text-field
+						label="Admin name"
+						value={setupName}
+						oninput={(e: Event) => setupName = (e.target as HTMLInputElement).value}
+						error={setupError && !setupName.trim() ? true : false}
+					>
+						<span class="material-symbols-rounded" slot="leading-icon">person</span>
+					</md-outlined-text-field>
+
+					<md-outlined-text-field
+						label="4-digit passcode"
+						type="password"
+						maxlength="4"
+						pattern="[0-9]*"
+						inputmode="numeric"
+						value={setupPasscode}
+						oninput={(e: Event) => setupPasscode = (e.target as HTMLInputElement).value}
+					>
+						<span class="material-symbols-rounded" slot="leading-icon">lock</span>
+					</md-outlined-text-field>
+
+					<md-outlined-text-field
+						label="Confirm passcode"
+						type="password"
+						maxlength="4"
+						pattern="[0-9]*"
+						inputmode="numeric"
+						value={setupConfirm}
+						oninput={(e: Event) => setupConfirm = (e.target as HTMLInputElement).value}
+					>
+						<span class="material-symbols-rounded" slot="leading-icon">lock</span>
+					</md-outlined-text-field>
+				</div>
+
+				{#if setupError}
+					<p class="md-body-small error-text">{setupError}</p>
+				{/if}
+
+				<div class="actions">
+					<md-filled-button onclick={handleSetup} disabled={setupLoading}>
+						{#if setupLoading}
+							<md-circular-progress indeterminate aria-label="Loading"></md-circular-progress>
+						{:else}
+							<span class="material-symbols-rounded" slot="icon">person_add</span>
+							Create Admin
+						{/if}
+					</md-filled-button>
+				</div>
+			</section>
+		{:else if data.adminOperators.length === 0}
 			<div class="empty-state">
 				<span class="material-symbols-rounded icon-lg">shield_person</span>
 				<p class="md-body-medium">No admin operators configured</p>
@@ -311,6 +415,32 @@
 		right: var(--md-sys-spacing-sm);
 		font-size: 20px;
 		color: var(--md-sys-color-primary);
+	}
+
+	.setup-section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.setup-desc {
+		color: var(--md-sys-color-on-surface-variant);
+		margin: 0;
+	}
+
+	.setup-fields {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.setup-fields md-outlined-text-field {
+		width: 100%;
+	}
+
+	.error-text {
+		color: var(--md-sys-color-error);
+		margin: 0;
 	}
 
 	.empty-state {
