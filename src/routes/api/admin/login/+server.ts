@@ -6,7 +6,7 @@ import { verifyPasscode, generateSessionToken, checkRateLimit, clearRateLimit } 
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
-const SESSION_MAX_AGE = 60 * 60 * 24; // 24 hours in seconds
+const SESSION_MAX_AGE = 60 * 60 * 24;
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
 	const clientIp = getClientAddress();
@@ -43,11 +43,11 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
-	if (!verifyPasscode(passcode, operator.passcode)) {
+	const valid = await verifyPasscode(passcode, operator.passcode);
+	if (!valid) {
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
-	// Successful login - clear rate limit
 	clearRateLimit(`admin-login:${clientIp}`);
 
 	const token = generateSessionToken();

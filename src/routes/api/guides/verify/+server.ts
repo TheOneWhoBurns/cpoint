@@ -18,7 +18,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Guide not found' }, { status: 404 });
 	}
 
-	if (!verifyPasscode(passcode, guide.passcode)) {
+	const valid = await verifyPasscode(passcode, guide.passcode);
+	if (!valid) {
 		return json({ error: 'Invalid passcode' }, { status: 401 });
 	}
 

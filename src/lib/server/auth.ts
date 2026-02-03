@@ -1,37 +1,38 @@
+import bcrypt from 'bcryptjs';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
+const SALT_ROUNDS = 10;
 const SCRYPT_KEYLEN = 32;
 const HASH_PREFIX = '$scrypt$';
 
-export function hashPasscode(passcode: string): string {
-	const salt = randomBytes(16).toString('hex');
-	const hash = scryptSync(passcode, salt, SCRYPT_KEYLEN).toString('hex');
-	return `${HASH_PREFIX}${salt}:${hash}`;
+export async function hashPasscode(passcode: string): Promise<string> {
+	return bcrypt.hash(passcode, SALT_ROUNDS);
 }
 
-export function verifyPasscode(passcode: string, stored: string): boolean {
-	if (!stored.startsWith(HASH_PREFIX)) {
-		// Legacy plaintext comparison (backward compat for existing DB rows)
-		return passcode === stored;
+export async function verifyPasscode(passcode: string, stored: string): Promise<boolean> {
+	if (stored.startsWith(HASH_PREFIX)) {
+		const withoutPrefix = stored.slice(HASH_PREFIX.length);
+		const [salt, hash] = withoutPrefix.split(':');
+		if (!salt || !hash) return false;
+		const derived = scryptSync(passcode, salt, SCRYPT_KEYLEN);
+		const expected = Buffer.from(hash, 'hex');
+		if (derived.length !== expected.length) return false;
+		return timingSafeEqual(derived, expected);
 	}
-	const withoutPrefix = stored.slice(HASH_PREFIX.length);
-	const [salt, hash] = withoutPrefix.split(':');
-	if (!salt || !hash) return false;
-	const derived = scryptSync(passcode, salt, SCRYPT_KEYLEN);
-	const expected = Buffer.from(hash, 'hex');
-	if (derived.length !== expected.length) return false;
-	return timingSafeEqual(derived, expected);
+	if (stored.startsWith('$2a$') || stored.startsWith('$2b$')) {
+		return bcrypt.compare(passcode, stored);
+	}
+	return passcode === stored;
 }
 
 export function generateSessionToken(): string {
 	return randomBytes(32).toString('hex');
 }
 
-// In-memory rate limiter. Resets on restart, which is acceptable.
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
 const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const WINDOW_MS = 15 * 60 * 1000;
 
 export function checkRateLimit(key: string): { allowed: boolean; retryAfterSeconds?: number } {
 	const now = Date.now();

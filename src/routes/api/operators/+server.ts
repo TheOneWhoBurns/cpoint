@@ -30,9 +30,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Passcode must be exactly 4 digits' }, { status: 400 });
 	}
 
+	const hashedPasscode = await hashPasscode(passcode);
+
 	const [newOperator] = await db
 		.insert(operators)
-		.values({ name, passcode: hashPasscode(passcode), isAdmin: isAdmin || false })
+		.values({ name, passcode: hashedPasscode, isAdmin: isAdmin || false })
 		.returning({
 			id: operators.id,
 			name: operators.name,
@@ -59,7 +61,6 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		return json({ error: 'No fields to update' }, { status: 400 });
 	}
 
-	// Prevent removing the last admin
 	if (isAdmin === false) {
 		const adminCount = await db
 			.select({ id: operators.id })

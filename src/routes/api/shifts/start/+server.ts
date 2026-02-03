@@ -21,7 +21,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Operator not found' }, { status: 404 });
 	}
 
-	if (!verifyPasscode(passcode, operator.passcode)) {
+	const valid = await verifyPasscode(passcode, operator.passcode);
+	if (!valid) {
 		return json({ error: 'Invalid passcode' }, { status: 401 });
 	}
 
@@ -48,5 +49,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		maxAge: 60 * 60 * 24
 	});
 
-	return json({ operator, shift });
+	const { passcode: _, ...safeOperator } = operator;
+	return json({ operator: safeOperator, shift });
 };

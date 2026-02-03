@@ -26,7 +26,7 @@
 	let {
 		open = $bindable(false),
 		rental,
-		operatorPasscode = '',
+		operatorId = 0,
 		onClose = () => {},
 		onCancel = () => {}
 	} = $props();
@@ -89,12 +89,22 @@
 		}
 	});
 
-	function verifyPasscode() {
-		if (passcodeInput === operatorPasscode) {
-			passcodeVerified = true;
-			passcodeError = '';
-		} else {
-			passcodeError = 'Invalid passcode';
+	async function verifyPasscode() {
+		try {
+			const res = await fetch('/api/operators/verify', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ operatorId, passcode: passcodeInput })
+			});
+			if (res.ok) {
+				passcodeVerified = true;
+				passcodeError = '';
+			} else {
+				passcodeError = 'Invalid passcode';
+				passcodeVerified = false;
+			}
+		} catch {
+			passcodeError = 'Verification failed';
 			passcodeVerified = false;
 		}
 	}

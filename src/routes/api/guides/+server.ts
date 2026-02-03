@@ -53,11 +53,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Passcode must be 4 digits' }, { status: 400 });
 	}
 
+	const hashedPasscode = await hashPasscode(passcode);
+
 	const [created] = await db
 		.insert(guides)
 		.values({
 			name,
-			passcode: hashPasscode(passcode),
+			passcode: hashedPasscode,
 			cooldownMinutes: cooldownMinutes || 30
 		})
 		.returning();
