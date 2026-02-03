@@ -27,17 +27,24 @@
 	let confirmEndShift = $state(false);
 	let showShiftSummary = $state(false);
 	let shiftSummary = $state<{
+		shiftStartedAt: string,
 		rentalsCount: number,
 		rentalsCash: number,
 		rentalsCredit: number,
+		rentalsUnpaid: number,
+		activeRentalsCount: number,
 		storeSalesCount: number,
 		storeSalesTotal: number,
 		tourBookingsCount: number,
 		tourRevenue: number,
 		tourCost: number,
 		totalCash: number,
-		totalCredit: number
+		totalCredit: number,
+		totalRevenue: number
 	} | null>(null);
+	let cashCounted = $state('');
+	let checklistItems = $state<Array<{ id: number; label: string }>>([]);
+	let closeChecklist = $state<Record<number, boolean>>({});
 	let showStoreSaleModal = $state(false);
 	let selectedStoreProductId = $state<number | null>(null);
 	let saleQuantity = $state(1);
@@ -205,6 +212,23 @@
 			const res = await fetch(`/api/shifts/summary?shiftId=${$shiftStore.shift.id}`);
 			if (res.ok) {
 				shiftSummary = await res.json();
+				cashCounted = '';
+				// Fetch configurable checklist items
+				try {
+					const clRes = await fetch('/api/closing-checklist');
+					if (clRes.ok) {
+						const allItems = await clRes.json();
+						checklistItems = allItems.filter((i: any) => i.isActive);
+					} else {
+						checklistItems = [];
+					}
+				} catch {
+					checklistItems = [];
+				}
+				closeChecklist = {};
+				for (const item of checklistItems) {
+					closeChecklist[item.id] = false;
+				}
 				showShiftSummary = true;
 			} else {
 				const d = await res.json();
@@ -215,6 +239,27 @@
 		}
 		loading = false;
 	}
+
+	function formatShiftDuration(startedAt: string): string {
+		const start = new Date(startedAt);
+		const now = new Date();
+		const diffMs = now.getTime() - start.getTime();
+		const hours = Math.floor(diffMs / 3600000);
+		const minutes = Math.floor((diffMs % 3600000) / 60000);
+		if (hours > 0) return `${hours}h ${minutes}m`;
+		return `${minutes}m`;
+	}
+
+	const cashDifference = $derived(() => {
+		if (!shiftSummary || cashCounted === '') return null;
+		const counted = parseFloat(cashCounted);
+		if (isNaN(counted)) return null;
+		return counted - shiftSummary.totalCash;
+	});
+
+	const allChecklistComplete = $derived(
+		checklistItems.length === 0 || Object.values(closeChecklist).every(v => v)
+	);
 
 	async function executeEndShift() {
 		loading = true;
@@ -1013,14 +1058,14 @@
 	</div>
 {/if}
 
-<!-- Shift Summary Modal -->
+<!-- Close Shift Modal -->
 {#if showShiftSummary && shiftSummary}
 	<div class="modal-overlay" onclick={() => { showShiftSummary = false; }}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+		<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
 				<div class="modal-title">
-					<span class="material-symbols-rounded">summarize</span>
-					<h2 class="md-headline-small">Shift Summary</h2>
+					<span class="material-symbols-rounded">fact_check</span>
+					<h2 class="md-headline-small">Close Shift</h2>
 				</div>
 				<md-icon-button onclick={() => { showShiftSummary = false; }}>
 					<span class="material-symbols-rounded">close</span>
@@ -1028,74 +1073,152 @@
 			</div>
 
 			<div class="modal-body">
+				<!-- Active Rentals Warning -->
+				{#if shiftSummary.activeRentalsCount > 0}
+					<div class="close-shift-warning">
+						<span class="material-symbols-rounded">warning</span>
+						<div>
+							<span class="md-title-small">
+								{shiftSummary.activeRentalsCount} active rental{shiftSummary.activeRentalsCount > 1 ? 's' : ''} still out
+							</span>
+							<span class="md-body-small">Close or return all rentals before ending your shift</span>
+						</div>
+					</div>
+				{/if}
+
+				<!-- Shift Info -->
+				<div class="close-shift-info">
+					<div class="close-shift-info-item">
+						<span class="material-symbols-rounded">schedule</span>
+						<div>
+							<span class="md-body-small">Shift Duration</span>
+							<span class="md-title-small">{formatShiftDuration(shiftSummary.shiftStartedAt)}</span>
+						</div>
+					</div>
+					<div class="close-shift-info-item">
+						<span class="material-symbols-rounded">confirmation_number</span>
+						<div>
+							<span class="md-body-small">Total Transactions</span>
+							<span class="md-title-small">{shiftSummary.rentalsCount + shiftSummary.storeSalesCount + shiftSummary.tourBookingsCount}</span>
+						</div>
+					</div>
+					<div class="close-shift-info-item">
+						<span class="material-symbols-rounded">attach_money</span>
+						<div>
+							<span class="md-body-small">Total Revenue</span>
+							<span class="md-title-small">${shiftSummary.totalRevenue.toFixed(2)}</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Revenue Breakdown -->
 				<div class="summary-section">
 					<div class="summary-header">
 						<span class="material-symbols-rounded">receipt_long</span>
-						<span class="md-title-medium">Rentals ({shiftSummary.rentalsCount})</span>
+						<span class="md-title-medium">Revenue Breakdown</span>
 					</div>
-					<div class="summary-row">
-						<span class="md-body-medium">Cash</span>
-						<span class="md-title-medium">${shiftSummary.rentalsCash}</span>
-					</div>
-					<div class="summary-row">
-						<span class="md-body-medium">Credit</span>
-						<span class="md-title-medium">${shiftSummary.rentalsCredit}</span>
-					</div>
-				</div>
-
-				{#if shiftSummary.storeSalesCount > 0}
-					<div class="summary-section">
-						<div class="summary-header">
-							<span class="material-symbols-rounded">shopping_cart</span>
-							<span class="md-title-medium">Store Sales ({shiftSummary.storeSalesCount})</span>
-						</div>
+					{#if shiftSummary.rentalsCount > 0}
 						<div class="summary-row">
-							<span class="md-body-medium">Total</span>
-							<span class="md-title-medium">${shiftSummary.storeSalesTotal}</span>
+							<span class="md-body-medium">Rentals ({shiftSummary.rentalsCount})</span>
+							<span class="md-title-medium">${(shiftSummary.rentalsCash + shiftSummary.rentalsCredit).toFixed(2)}</span>
 						</div>
-					</div>
-				{/if}
-
-				{#if shiftSummary.tourBookingsCount > 0}
-					<div class="summary-section">
-						<div class="summary-header">
-							<span class="material-symbols-rounded">tour</span>
-							<span class="md-title-medium">Tour Agency ({shiftSummary.tourBookingsCount})</span>
-						</div>
+					{/if}
+					{#if shiftSummary.storeSalesCount > 0}
 						<div class="summary-row">
-							<span class="md-body-medium">Revenue</span>
+							<span class="md-body-medium">Store Sales ({shiftSummary.storeSalesCount})</span>
+							<span class="md-title-medium">${shiftSummary.storeSalesTotal.toFixed(2)}</span>
+						</div>
+					{/if}
+					{#if shiftSummary.tourBookingsCount > 0}
+						<div class="summary-row">
+							<span class="md-body-medium">Tours ({shiftSummary.tourBookingsCount})</span>
 							<span class="md-title-medium">${shiftSummary.tourRevenue.toFixed(2)}</span>
 						</div>
 						<div class="summary-row">
-							<span class="md-body-medium">Cost</span>
-							<span class="md-title-medium">-${shiftSummary.tourCost.toFixed(2)}</span>
+							<span class="md-body-medium" style="padding-left: var(--md-sys-spacing-lg)">Tour Cost</span>
+							<span class="md-title-medium" style="color: var(--md-sys-color-error)">-${shiftSummary.tourCost.toFixed(2)}</span>
 						</div>
-						<div class="summary-row">
-							<span class="md-body-medium">Profit</span>
-							<span class="md-title-medium">${(shiftSummary.tourRevenue - shiftSummary.tourCost).toFixed(2)}</span>
+					{/if}
+					{#if shiftSummary.rentalsUnpaid > 0}
+						<div class="summary-row" style="border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: var(--md-sys-spacing-sm); margin-top: var(--md-sys-spacing-xs);">
+							<span class="md-body-medium" style="color: var(--md-sys-color-error)">Unpaid</span>
+							<span class="md-title-medium" style="color: var(--md-sys-color-error)">${shiftSummary.rentalsUnpaid.toFixed(2)}</span>
 						</div>
-					</div>
-				{/if}
+					{/if}
+				</div>
 
+				<!-- Cash Reconciliation -->
 				<div class="summary-section totals">
 					<div class="summary-header">
 						<span class="material-symbols-rounded">payments</span>
-						<span class="md-title-medium">Totals</span>
+						<span class="md-title-medium">Cash Reconciliation</span>
 					</div>
 					<div class="summary-row total">
-						<span class="md-body-medium">Cash</span>
-						<span class="md-headline-small">${shiftSummary.totalCash}</span>
+						<span class="md-body-medium">Expected Cash</span>
+						<span class="md-headline-small">${shiftSummary.totalCash.toFixed(2)}</span>
 					</div>
 					<div class="summary-row total">
-						<span class="md-body-medium">Credit</span>
-						<span class="md-headline-small">${shiftSummary.totalCredit}</span>
+						<span class="md-body-medium">Credit Card</span>
+						<span class="md-headline-small">${shiftSummary.totalCredit.toFixed(2)}</span>
+					</div>
+					<div class="cash-count-input">
+						<md-outlined-text-field
+							label="Cash counted in drawer"
+							type="number"
+							value={cashCounted}
+							oninput={(e: Event) => cashCounted = (e.target as HTMLInputElement).value}
+						>
+							<span class="material-symbols-rounded" slot="leading-icon">point_of_sale</span>
+						</md-outlined-text-field>
+						{#if cashDifference() !== null}
+							{@const diff = cashDifference()}
+							<div class="cash-difference" class:cash-over={diff !== null && diff > 0} class:cash-short={diff !== null && diff < 0} class:cash-match={diff !== null && diff === 0}>
+								<span class="material-symbols-rounded">
+									{diff !== null && diff === 0 ? 'check_circle' : diff !== null && diff > 0 ? 'arrow_upward' : 'arrow_downward'}
+								</span>
+								<span class="md-title-small">
+									{#if diff !== null && diff === 0}
+										Cash matches expected
+									{:else if diff !== null && diff > 0}
+										Over by ${diff.toFixed(2)}
+									{:else if diff !== null}
+										Short by ${Math.abs(diff).toFixed(2)}
+									{/if}
+								</span>
+							</div>
+						{/if}
 					</div>
 				</div>
+
+				<!-- Close Checklist -->
+				{#if checklistItems.length > 0}
+					<div class="summary-section">
+						<div class="summary-header">
+							<span class="material-symbols-rounded">checklist</span>
+							<span class="md-title-medium">Closing Checklist</span>
+						</div>
+						{#each checklistItems as item (item.id)}
+							<label class="checklist-item">
+								<md-checkbox
+									checked={closeChecklist[item.id] ?? false}
+									onchange={(e: Event) => closeChecklist[item.id] = (e.target as HTMLInputElement).checked}
+								></md-checkbox>
+								<div class="checklist-label">
+									<span class="md-body-medium">{item.label}</span>
+								</div>
+							</label>
+						{/each}
+					</div>
+				{/if}
 			</div>
 
 			<div class="modal-footer">
 				<md-outlined-button onclick={() => { showShiftSummary = false; }}>Cancel</md-outlined-button>
-				<md-filled-button class="danger-btn" onclick={() => { showShiftSummary = false; executeEndShift(); }}>
+				<md-filled-button
+					class="danger-btn"
+					disabled={shiftSummary.activeRentalsCount > 0}
+					onclick={() => { showShiftSummary = false; executeEndShift(); }}
+				>
 					<span class="material-symbols-rounded" slot="icon">download</span>
 					End Shift & Download Report
 				</md-filled-button>
@@ -2277,6 +2400,127 @@
 
 	.summary-section.totals .summary-row .md-body-medium {
 		color: var(--md-sys-color-on-secondary-container);
+	}
+
+	/* Close Shift Modal */
+	.close-shift-warning {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-md);
+		background: var(--md-sys-color-error-container);
+		border-radius: var(--md-sys-shape-corner-medium);
+		border: 1px solid var(--md-sys-color-error);
+	}
+
+	.close-shift-warning > .material-symbols-rounded {
+		font-size: 28px;
+		color: var(--md-sys-color-error);
+		flex-shrink: 0;
+	}
+
+	.close-shift-warning > div {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.close-shift-warning .md-title-small {
+		color: var(--md-sys-color-on-error-container);
+	}
+
+	.close-shift-warning .md-body-small {
+		color: var(--md-sys-color-on-error-container);
+		opacity: 0.8;
+	}
+
+	.close-shift-info {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.close-shift-info-item {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-md);
+		background: var(--md-sys-color-surface-container-low);
+		border-radius: var(--md-sys-shape-corner-medium);
+	}
+
+	.close-shift-info-item > .material-symbols-rounded {
+		font-size: 24px;
+		color: var(--md-sys-color-primary);
+		flex-shrink: 0;
+	}
+
+	.close-shift-info-item > div {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.close-shift-info-item .md-body-small {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.close-shift-info-item .md-title-small {
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.cash-count-input {
+		margin-top: var(--md-sys-spacing-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.cash-count-input md-outlined-text-field {
+		width: 100%;
+	}
+
+	.cash-difference {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	.cash-difference .material-symbols-rounded {
+		font-size: 20px;
+	}
+
+	.cash-match {
+		background: #e8f5e9;
+		color: #2e7d32;
+	}
+
+	.cash-over {
+		background: #fff3e0;
+		color: #e65100;
+	}
+
+	.cash-short {
+		background: var(--md-sys-color-error-container);
+		color: var(--md-sys-color-error);
+	}
+
+	.checklist-item {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+		padding: var(--md-sys-spacing-sm) 0;
+		cursor: pointer;
+	}
+
+	.checklist-label {
+		flex: 1;
+	}
+
+	.checklist-label .md-body-medium {
+		color: var(--md-sys-color-on-surface);
 	}
 
 	/* Danger Button */

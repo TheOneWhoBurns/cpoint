@@ -140,6 +140,14 @@ export const tourBookings = pgTable('tour_bookings', {
 	index('idx_tour_bookings_status').on(table.status)
 ]);
 
+export const closingChecklistItems = pgTable('closing_checklist_items', {
+	id: serial('id').primaryKey(),
+	label: text('label').notNull(),
+	sortOrder: integer('sort_order').default(0),
+	isActive: boolean('is_active').default(true),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
 export const actionLog = pgTable('action_log', {
 	id: serial('id').primaryKey(),
 	shiftId: integer('shift_id').references(() => shifts.id),
@@ -194,3 +202,5 @@ export type TourAgencyProduct = typeof tourAgencyProducts.$inferSelect;
 export type NewTourAgencyProduct = typeof tourAgencyProducts.$inferInsert;
 export type TourBooking = typeof tourBookings.$inferSelect;
 export type NewTourBooking = typeof tourBookings.$inferInsert;
+export type ClosingChecklistItem = typeof closingChecklistItems.$inferSelect;
+export type NewClosingChecklistItem = typeof closingChecklistItems.$inferInsert;

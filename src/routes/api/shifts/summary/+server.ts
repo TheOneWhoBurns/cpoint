@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { rentals, storeSales, tourBookings } from '$lib/server/db/schema';
+import { rentals, storeSales, tourBookings, shifts } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -8,6 +8,10 @@ interface Pricing {
 	type?: string;
 	total?: number;
 	paymentMethod?: string;
+	cashPaid?: number;
+	creditPaid?: number;
+	yetToPay?: number;
+	discount?: number;
 }
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -19,6 +23,15 @@ export const GET: RequestHandler = async ({ url }) => {
 	const shiftId = parseInt(shiftIdStr);
 	if (isNaN(shiftId)) {
 		return json({ error: 'Invalid shift ID' }, { status: 400 });
+	}
+
+	const [shift] = await db
+		.select()
+		.from(shifts)
+		.where(eq(shifts.id, shiftId));
+
+	if (!shift) {
+		return json({ error: 'Shift not found' }, { status: 404 });
 	}
 
 	const shiftRentals = await db
@@ -33,15 +46,22 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	let rentalsCash = 0;
 	let rentalsCredit = 0;
+	let rentalsUnpaid = 0;
+	let activeRentalsCount = 0;
 
 	for (const r of shiftRentals) {
 		const pricing = r.pricing as Pricing;
-		const total = pricing?.total || 0;
-		if (pricing?.paymentMethod === 'credit') {
-			rentalsCredit += total;
-		} else {
-			rentalsCash += total;
+		if (r.status === 'active') {
+			activeRentalsCount++;
 		}
+		// Use split payment fields if available, fall back to paymentMethod
+		const cashPaid = pricing?.cashPaid ?? (pricing?.paymentMethod === 'cash' ? (pricing?.total || 0) : 0);
+		const creditPaid = pricing?.creditPaid ?? (pricing?.paymentMethod === 'credit' ? (pricing?.total || 0) : 0);
+		const yetToPay = pricing?.yetToPay ?? 0;
+
+		rentalsCash += cashPaid;
+		rentalsCredit += creditPaid;
+		rentalsUnpaid += yetToPay;
 	}
 
 	const storeSalesTotal = Math.round(shiftSalesData.reduce((sum, s) => sum + s.total, 0) / 100);
@@ -54,16 +74,23 @@ export const GET: RequestHandler = async ({ url }) => {
 	const tourRevenue = shiftTourBookings.reduce((sum, b) => sum + b.totalPrice, 0) / 100;
 	const tourCost = shiftTourBookings.reduce((sum, b) => sum + (b.cost ?? 0), 0) / 100;
 
+	const totalCash = rentalsCash + storeSalesTotal + tourRevenue;
+	const totalCredit = rentalsCredit;
+
 	return json({
+		shiftStartedAt: shift.startedAt,
 		rentalsCount: shiftRentals.length,
 		rentalsCash,
 		rentalsCredit,
+		rentalsUnpaid,
+		activeRentalsCount,
 		storeSalesCount: shiftSalesData.length,
 		storeSalesTotal,
 		tourBookingsCount: shiftTourBookings.length,
 		tourRevenue,
 		tourCost,
-		totalCash: rentalsCash + storeSalesTotal + tourRevenue,
-		totalCredit: rentalsCredit
+		totalCash,
+		totalCredit,
+		totalRevenue: totalCash + totalCredit
 	});
 };
