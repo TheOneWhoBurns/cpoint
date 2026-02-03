@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { tourBookings, tourAgencyProducts } from '$lib/server/db/schema';
+import { tourBookings, tourAgencyProducts, operators } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -89,7 +89,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
-	const { id, action, cost } = await request.json();
+	const { id, action, cost, tourProductId, pax, activityDate, guideId } = await request.json();
 
 	if (!id) {
 		return json({ error: 'Booking ID required' }, { status: 400 });
@@ -112,17 +112,84 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		return json(updated);
 	}
 
+	if (action === 'edit') {
+		const [booking] = await db.select().from(tourBookings).where(eq(tourBookings.id, id));
+		if (!booking) {
+			return json({ error: 'Booking not found' }, { status: 404 });
+		}
+
+		const updates: Record<string, unknown> = {};
+
+		if (tourProductId !== undefined) {
+			const [product] = await db.select().from(tourAgencyProducts).where(eq(tourAgencyProducts.id, tourProductId));
+			if (!product) {
+				return json({ error: 'Tour product not found' }, { status: 404 });
+			}
+			updates.tourProductId = tourProductId;
+			updates.unitPrice = product.price;
+			updates.totalPrice = product.price * (pax ?? booking.pax);
+		}
+
+		if (pax !== undefined && pax >= 1) {
+			updates.pax = pax;
+			if (!tourProductId) {
+				updates.totalPrice = booking.unitPrice * pax;
+			}
+		}
+
+		if (activityDate !== undefined) {
+			updates.activityDate = new Date(activityDate);
+		}
+
+		if (guideId !== undefined) {
+			updates.guideId = guideId || null;
+		}
+
+		if (Object.keys(updates).length === 0) {
+			return json({ error: 'No valid updates provided' }, { status: 400 });
+		}
+
+		const [updated] = await db
+			.update(tourBookings)
+			.set(updates)
+			.where(eq(tourBookings.id, id))
+			.returning();
+
+		return json(updated);
+	}
+
 	return json({ error: 'Unknown action' }, { status: 400 });
 };
 
 export const DELETE: RequestHandler = async ({ request }) => {
-	const { id } = await request.json();
+	const { id, passcode } = await request.json();
 
 	if (!id) {
 		return json({ error: 'Booking ID required' }, { status: 400 });
 	}
 
-	await db.delete(tourBookings).where(eq(tourBookings.id, id));
+	if (!passcode) {
+		return json({ error: 'Passcode required' }, { status: 400 });
+	}
 
-	return json({ success: true });
+	const [operator] = await db
+		.select()
+		.from(operators)
+		.where(eq(operators.passcode, passcode));
+
+	if (!operator) {
+		return json({ error: 'Invalid passcode' }, { status: 403 });
+	}
+
+	// Soft delete
+	const [updated] = await db
+		.update(tourBookings)
+		.set({
+			status: 'deleted',
+			deletedAt: new Date()
+		})
+		.where(eq(tourBookings.id, id))
+		.returning();
+
+	return json(updated);
 };

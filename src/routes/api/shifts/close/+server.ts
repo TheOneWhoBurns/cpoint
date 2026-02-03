@@ -83,6 +83,7 @@ export const POST: RequestHandler = async ({ cookies }) => {
 			unitPrice: storeSales.unitPrice,
 			total: storeSales.total,
 			createdAt: storeSales.createdAt,
+			deletedAt: storeSales.deletedAt,
 			productName: storeProducts.name
 		})
 		.from(storeSales)
@@ -106,26 +107,30 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		.leftJoin(tourAgencyProducts, eq(tourBookings.tourProductId, tourAgencyProducts.id))
 		.where(eq(tourBookings.shiftId, shift.id));
 
-	const rentalRevenue = shiftRentals.reduce((acc, r) => {
+	const activeRentals = shiftRentals.filter(r => r.status !== 'deleted');
+	const activeSales = shiftSales.filter(s => !s.deletedAt);
+	const activeBookings = shiftTourBookings.filter(b => b.status !== 'deleted');
+
+	const rentalRevenue = activeRentals.reduce((acc, r) => {
 		const pricing = r.pricing as Pricing;
 		return acc + (pricing?.total || 0);
 	}, 0);
 
-	const salesRevenue = shiftSales.reduce((acc, s) => acc + s.total, 0);
+	const salesRevenue = activeSales.reduce((acc, s) => acc + s.total, 0);
 
-	const tourRevenue = shiftTourBookings.reduce((acc, b) => acc + b.totalPrice, 0);
-	const tourCost = shiftTourBookings.reduce((acc, b) => acc + (b.cost ?? 0), 0);
+	const tourRevenue = activeBookings.reduce((acc, b) => acc + b.totalPrice, 0);
+	const tourCost = activeBookings.reduce((acc, b) => acc + (b.cost ?? 0), 0);
 
 	const [updatedShift] = await db
 		.update(shifts)
 		.set({
 			endedAt: new Date(),
 			summary: {
-				rentalsCount: shiftRentals.length,
+				rentalsCount: activeRentals.length,
 				rentalRevenue,
-				salesCount: shiftSales.length,
+				salesCount: activeSales.length,
 				salesRevenue,
-				tourBookingsCount: shiftTourBookings.length,
+				tourBookingsCount: activeBookings.length,
 				tourRevenue,
 				tourCost,
 				totalRevenue: rentalRevenue + salesRevenue + tourRevenue
@@ -164,32 +169,32 @@ export const POST: RequestHandler = async ({ cookies }) => {
 			'Cash ($)': cashPaid,
 			'Credit ($)': creditPaid,
 			'Unpaid ($)': yetToPay,
-			'Status': r.status
+			'Status': r.status === 'deleted' ? '[DELETED]' : r.status
 		};
 	});
 
-	// Calculate totals
-	const cashTotal = shiftRentals.reduce((sum, r) => {
+	// Calculate totals (only non-deleted)
+	const cashTotal = activeRentals.reduce((sum, r) => {
 		const pricing = r.pricing as Pricing;
 		return sum + (pricing?.cashPaid ?? (pricing?.paymentMethod === 'cash' ? (pricing?.total || 0) : 0));
 	}, 0);
-	const creditTotal = shiftRentals.reduce((sum, r) => {
+	const creditTotal = activeRentals.reduce((sum, r) => {
 		const pricing = r.pricing as Pricing;
 		return sum + (pricing?.creditPaid ?? (pricing?.paymentMethod === 'credit' ? (pricing?.total || 0) : 0));
 	}, 0);
-	const unpaidTotal = shiftRentals.reduce((sum, r) => {
+	const unpaidTotal = activeRentals.reduce((sum, r) => {
 		const pricing = r.pricing as Pricing;
 		return sum + (pricing?.yetToPay ?? 0);
 	}, 0);
-	const discountTotal = shiftRentals.reduce((sum, r) => {
+	const discountTotal = activeRentals.reduce((sum, r) => {
 		const pricing = r.pricing as Pricing;
 		return sum + (pricing?.discount ?? 0);
 	}, 0);
-	const priceTotal = shiftRentals.reduce((sum, r) => {
+	const priceTotal = activeRentals.reduce((sum, r) => {
 		const pricing = r.pricing as Pricing;
 		return sum + (pricing?.calculatedPrice ?? pricing?.total ?? 0);
 	}, 0);
-	const finalTotal = shiftRentals.reduce((sum, r) => {
+	const finalTotal = activeRentals.reduce((sum, r) => {
 		const pricing = r.pricing as Pricing;
 		return sum + (pricing?.finalPrice ?? pricing?.total ?? 0);
 	}, 0);
@@ -198,7 +203,7 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		'Customer': 'TOTALS',
 		'Hotel': '',
 		'Phone': '',
-		'Items': `${shiftRentals.length} rentals`,
+		'Items': `${activeRentals.length} rentals`,
 		'Type': '',
 		'Start': '',
 		'End': '',
@@ -213,11 +218,12 @@ export const POST: RequestHandler = async ({ cookies }) => {
 	});
 
 	const salesData = shiftSales.map(s => ({
-		'Product': s.productName || 'Unknown',
+		'Product': s.deletedAt ? `${s.productName || 'Unknown'} [DELETED]` : (s.productName || 'Unknown'),
 		'Quantity': s.quantity,
 		'Unit Price ($)': Math.round(s.unitPrice / 100),
 		'Total ($)': Math.round(s.total / 100),
-		'Time': s.createdAt ? formatDateTime(s.createdAt) : ''
+		'Time': s.createdAt ? formatDateTime(s.createdAt) : '',
+		'Status': s.deletedAt ? '[DELETED]' : ''
 	}));
 
 	salesData.push({
@@ -225,7 +231,8 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		'Quantity': '' as any,
 		'Unit Price ($)': 'TOTALS:' as any,
 		'Total ($)': Math.round(salesRevenue / 100),
-		'Time': `${shiftSales.length} sales`
+		'Time': `${activeSales.length} sales`,
+		'Status': ''
 	});
 
 	// Tour bookings data
@@ -238,18 +245,18 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		'Profit ($)': b.cost !== null ? Math.round((b.totalPrice - b.cost) / 100) : 'Pending',
 		'Booked': b.bookedAt ? formatDate(b.bookedAt) : '',
 		'Activity Date': b.activityDate ? formatDate(b.activityDate) : '',
-		'Status': b.status
+		'Status': b.status === 'deleted' ? '[DELETED]' : b.status
 	}));
 
 	if (tourData.length > 0) {
 		tourData.push({
 			'Tour': 'TOTALS',
-			'Pax': shiftTourBookings.reduce((sum, b) => sum + b.pax, 0),
+			'Pax': activeBookings.reduce((sum, b) => sum + b.pax, 0),
 			'Price/Person ($)': '' as any,
 			'Revenue ($)': Math.round(tourRevenue / 100),
 			'Cost ($)': Math.round(tourCost / 100),
 			'Profit ($)': Math.round((tourRevenue - tourCost) / 100),
-			'Booked': `${shiftTourBookings.length} bookings`,
+			'Booked': `${activeBookings.length} bookings`,
 			'Activity Date': '',
 			'Status': ''
 		});

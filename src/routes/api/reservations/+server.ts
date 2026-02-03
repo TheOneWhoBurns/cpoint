@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { reservations, rentals } from '$lib/server/db/schema';
+import { reservations, rentals, operators } from '$lib/server/db/schema';
 import { eq, and, or, lte, gte } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -92,7 +92,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
-	const { id, action, rentalId } = await request.json();
+	const { id, action, rentalId, customer, reason, items, reservedFrom, reservedUntil, guideId, passcode } = await request.json();
 
 	if (!id) {
 		return json({ error: 'Reservation ID required' }, { status: 400 });
@@ -103,11 +103,23 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		return json({ error: 'Reservation not found' }, { status: 404 });
 	}
 
-	if (reservation.status !== 'active') {
-		return json({ error: 'Reservation is not active' }, { status: 400 });
-	}
-
 	if (action === 'cancel') {
+		if (reservation.status !== 'active') {
+			return json({ error: 'Reservation is not active' }, { status: 400 });
+		}
+
+		// Passcode required for cancel (delete equivalent)
+		if (passcode) {
+			const [operator] = await db
+				.select()
+				.from(operators)
+				.where(eq(operators.passcode, passcode));
+
+			if (!operator) {
+				return json({ error: 'Invalid passcode' }, { status: 403 });
+			}
+		}
+
 		const [updated] = await db
 			.update(reservations)
 			.set({
@@ -120,7 +132,43 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		return json(updated);
 	}
 
+	if (action === 'edit') {
+		if (reservation.status !== 'active') {
+			return json({ error: 'Cannot edit a non-active reservation' }, { status: 400 });
+		}
+
+		const updates: Record<string, unknown> = {};
+
+		if (customer !== undefined) updates.customer = customer;
+		if (reason !== undefined) updates.reason = reason;
+		if (items !== undefined) updates.items = items;
+		if (guideId !== undefined) updates.guideId = guideId || null;
+
+		if (reservedFrom !== undefined) {
+			updates.reservedFrom = new Date(reservedFrom);
+		}
+		if (reservedUntil !== undefined) {
+			updates.reservedUntil = new Date(reservedUntil);
+		}
+
+		if (Object.keys(updates).length === 0) {
+			return json({ error: 'No valid updates provided' }, { status: 400 });
+		}
+
+		const [updated] = await db
+			.update(reservations)
+			.set(updates)
+			.where(eq(reservations.id, id))
+			.returning();
+
+		return json(updated);
+	}
+
 	if (action === 'fulfill') {
+		if (reservation.status !== 'active') {
+			return json({ error: 'Reservation is not active' }, { status: 400 });
+		}
+
 		const [updated] = await db
 			.update(reservations)
 			.set({

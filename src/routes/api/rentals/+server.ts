@@ -464,3 +464,63 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 	return json({ error: 'Invalid action' }, { status: 400 });
 };
+
+export const DELETE: RequestHandler = async ({ request }) => {
+	const { id, passcode } = await request.json();
+
+	if (!id) {
+		return json({ error: 'Rental ID required' }, { status: 400 });
+	}
+
+	if (!passcode) {
+		return json({ error: 'Passcode required' }, { status: 400 });
+	}
+
+	// Verify passcode against any operator
+	const [operator] = await db
+		.select()
+		.from(operators)
+		.where(eq(operators.passcode, passcode));
+
+	if (!operator) {
+		return json({ error: 'Invalid passcode' }, { status: 403 });
+	}
+
+	const [rental] = await db.select().from(rentals).where(eq(rentals.id, id));
+	if (!rental) {
+		return json({ error: 'Rental not found' }, { status: 404 });
+	}
+
+	// Release equipment back to inventory if active
+	if (rental.status === 'active') {
+		const rentalItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
+		for (const item of rentalItems) {
+			if (item.type === 'tracked' && item.itemId) {
+				await db
+					.update(trackedItems)
+					.set({ status: 'available' })
+					.where(eq(trackedItems.id, item.itemId));
+			} else if (item.type === 'generic' && item.categoryId) {
+				const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
+				if (cat) {
+					await db
+						.update(productTypes)
+						.set({ availableQuantity: (cat.availableQuantity ?? 0) + (item.quantity || 1) })
+						.where(eq(productTypes.id, item.categoryId));
+				}
+			}
+		}
+	}
+
+	// Soft delete - mark as deleted, set status to 'deleted'
+	const [updated] = await db
+		.update(rentals)
+		.set({
+			status: 'deleted',
+			deletedAt: new Date()
+		})
+		.where(eq(rentals.id, id))
+		.returning();
+
+	return json(updated);
+};

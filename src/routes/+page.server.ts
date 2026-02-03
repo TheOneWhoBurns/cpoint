@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { rentalProducts, rentals, trackedItems, productTypes, guides, storeProducts, shifts, operators, tourAgencyProducts, tourBookings, reservations } from '$lib/server/db/schema';
+import { rentalProducts, rentals, trackedItems, productTypes, guides, storeProducts, shifts, operators, tourAgencyProducts, tourBookings, reservations, storeSales } from '$lib/server/db/schema';
 import { eq, and, isNull, ne } from 'drizzle-orm';
 import type { Rental } from '$lib/server/db/schema';
 
@@ -20,6 +20,17 @@ export const load: PageServerLoad = async ({ cookies }) => {
 	const operatorIdStr = cookies.get('operatorId');
 	let activeRentals: Rental[] = [];
 	let previousShiftRentals: Rental[] = [];
+	let shiftStoreSales: Array<{
+		id: number;
+		shiftId: number | null;
+		productId: number | null;
+		quantity: number;
+		unitPrice: number;
+		total: number;
+		deletedAt: Date | null;
+		createdAt: Date | null;
+		productName: string | null;
+	}> = [];
 	let activeTourBookings: Array<{
 		id: number;
 		shiftId: number | null;
@@ -57,6 +68,25 @@ export const load: PageServerLoad = async ({ cookies }) => {
 					eq(rentals.status, 'completed')
 				));
 
+			shiftStoreSales = await db
+				.select({
+					id: storeSales.id,
+					shiftId: storeSales.shiftId,
+					productId: storeSales.productId,
+					quantity: storeSales.quantity,
+					unitPrice: storeSales.unitPrice,
+					total: storeSales.total,
+					deletedAt: storeSales.deletedAt,
+					createdAt: storeSales.createdAt,
+					productName: storeProducts.name
+				})
+				.from(storeSales)
+				.leftJoin(storeProducts, eq(storeSales.productId, storeProducts.id))
+				.where(and(
+					eq(storeSales.shiftId, currentShift.id),
+					isNull(storeSales.deletedAt)
+				));
+
 			activeTourBookings = await db
 				.select({
 					id: tourBookings.id,
@@ -89,6 +119,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		storeProducts: allStoreProducts,
 		tourProducts: allTourProducts,
 		tourBookings: activeTourBookings,
-		reservations: activeReservations
+		reservations: activeReservations,
+		storeSales: shiftStoreSales
 	};
 };
