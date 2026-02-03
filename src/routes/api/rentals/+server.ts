@@ -1,11 +1,20 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { rentals, trackedItems, productTypes, rentalProducts, guides, payments } from '$lib/server/db/schema';
+import { rentals, trackedItems, productTypes, rentalProducts, guides, payments, reservations, operators } from '$lib/server/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
+interface ReservationItem {
+	type: string;
+	itemId?: number;
+	categoryId?: number;
+	code?: string;
+	name: string;
+	quantity?: number;
+}
+
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const { productId, customer, items, rentalType, quantity = 1, shiftId, guideId = null } = await request.json();
+	const { productId, customer, items, rentalType, quantity = 1, shiftId, guideId = null, overrideReservationIds, operatorPasscode, fromReservationId } = await request.json();
 
 	if (!productId) {
 		return json({ error: 'Product ID required' }, { status: 400 });
@@ -70,6 +79,71 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 	}
 
+	// Check for reservation conflicts (unless fulfilling from a reservation or overriding)
+	if (!fromReservationId) {
+		const rentalTrackedIds = items
+			.filter((i: ReservationItem) => i.type === 'tracked' && i.itemId)
+			.map((i: ReservationItem) => i.itemId!);
+
+		if (rentalTrackedIds.length > 0) {
+			const activeReservations = await db
+				.select()
+				.from(reservations)
+				.where(eq(reservations.status, 'active'));
+
+			const now = new Date();
+			const conflicts = [];
+
+			for (const res of activeReservations) {
+				const resItems = res.items as ReservationItem[];
+				const resFrom = new Date(res.reservedFrom);
+				const resUntil = new Date(res.reservedUntil);
+
+				// A rental starting now conflicts if the reservation window overlaps with now
+				if (now < resUntil && resFrom <= resUntil) {
+					const resTrackedIds = resItems
+						.filter(i => i.type === 'tracked' && i.itemId)
+						.map(i => i.itemId!);
+
+					const overlappingIds = rentalTrackedIds.filter((id: number) => resTrackedIds.includes(id));
+					if (overlappingIds.length > 0) {
+						// Check if this reservation is being overridden
+						if (!overrideReservationIds || !overrideReservationIds.includes(res.id)) {
+							conflicts.push({
+								id: res.id,
+								customer: res.customer,
+								reason: res.reason,
+								reservedFrom: res.reservedFrom,
+								reservedUntil: res.reservedUntil,
+								items: resItems.filter(i => i.itemId && overlappingIds.includes(i.itemId))
+							});
+						}
+					}
+				}
+			}
+
+			if (conflicts.length > 0) {
+				// If override requested, verify passcode
+				if (overrideReservationIds && operatorPasscode) {
+					const [operator] = await db
+						.select()
+						.from(operators)
+						.where(eq(operators.passcode, operatorPasscode));
+
+					if (!operator) {
+						return json({ error: 'Invalid passcode for reservation override' }, { status: 403 });
+					}
+					// Passcode valid, continue with rental creation
+				} else {
+					return json({
+						error: 'reservation_conflict',
+						conflicts
+					}, { status: 409 });
+				}
+			}
+		}
+	}
+
 	for (const item of items) {
 		if (item.type === 'tracked') {
 			await db
@@ -105,6 +179,17 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			status: 'active'
 		})
 		.returning();
+
+	// If fulfilling from a reservation, mark it as fulfilled
+	if (fromReservationId) {
+		await db
+			.update(reservations)
+			.set({
+				status: 'fulfilled',
+				fulfilledByRentalId: created.id
+			})
+			.where(eq(reservations.id, fromReservationId));
+	}
 
 	return json(created, { status: 201 });
 };

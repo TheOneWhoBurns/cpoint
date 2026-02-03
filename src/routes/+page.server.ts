@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { rentalProducts, rentals, trackedItems, productTypes, guides, storeProducts, shifts, operators, tourAgencyProducts, tourBookings } from '$lib/server/db/schema';
+import { rentalProducts, rentals, trackedItems, productTypes, guides, storeProducts, shifts, operators, tourAgencyProducts, tourBookings, reservations } from '$lib/server/db/schema';
 import { eq, and, isNull, ne } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ cookies }) => {
@@ -10,6 +10,11 @@ export const load: PageServerLoad = async ({ cookies }) => {
 	const allGuides = await db.select().from(guides).where(eq(guides.isActive, true));
 	const allStoreProducts = await db.select().from(storeProducts).where(eq(storeProducts.isActive, true));
 	const allTourProducts = await db.select().from(tourAgencyProducts).where(eq(tourAgencyProducts.isActive, true));
+
+	const activeReservations = await db
+		.select()
+		.from(reservations)
+		.where(eq(reservations.status, 'active'));
 
 	const operatorIdStr = cookies.get('operatorId');
 	let activeRentals = [];
@@ -68,6 +73,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		guides: allGuides,
 		storeProducts: allStoreProducts,
 		tourProducts: allTourProducts,
-		tourBookings: activeTourBookings
+		tourBookings: activeTourBookings,
+		reservations: activeReservations
 	};
 };
