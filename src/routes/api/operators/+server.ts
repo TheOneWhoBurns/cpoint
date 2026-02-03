@@ -54,6 +54,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 	if (isActive !== undefined) updateData.isActive = isActive;
 	if (isAdmin !== undefined) updateData.isAdmin = isAdmin;
 
+	if (Object.keys(updateData).length === 0) {
+		return json({ error: 'No fields to update' }, { status: 400 });
+	}
+
 	const [updated] = await db
 		.update(operators)
 		.set(updateData)
@@ -64,6 +68,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			isActive: operators.isActive,
 			isAdmin: operators.isAdmin
 		});
+
+	if (!updated) {
+		return json({ error: 'Operator not found' }, { status: 404 });
+	}
 
 	return json(updated);
 };

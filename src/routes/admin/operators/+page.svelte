@@ -65,6 +65,7 @@
 	}
 
 	async function toggleAdmin(id: number, currentIsAdmin: boolean) {
+		error = '';
 		loading = true;
 		try {
 			const res = await fetch('/api/operators', {

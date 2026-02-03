@@ -12,8 +12,12 @@
 	async function handleLogout() {
 		loggingOut = true;
 		try {
-			await fetch('/api/admin/logout', { method: 'POST' });
-			goto('/admin/login');
+			const res = await fetch('/api/admin/logout', { method: 'POST' });
+			if (res.ok) {
+				goto('/admin/login');
+			} else {
+				loggingOut = false;
+			}
 		} catch {
 			loggingOut = false;
 		}

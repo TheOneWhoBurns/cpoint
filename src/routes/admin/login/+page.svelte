@@ -33,8 +33,8 @@
 			});
 
 			if (!response.ok) {
-				const data = await response.json();
-				error = data.error || 'Failed to log in';
+				const result = await response.json();
+				error = result.error || 'Failed to log in';
 				loading = false;
 				return;
 			}
@@ -94,6 +94,7 @@
 							class="admin-card"
 							class:selected={selectedAdmin?.id === admin.id}
 							onclick={() => selectAdmin(admin)}
+							aria-label={`Select admin ${admin.name}`}
 						>
 							<div class="avatar">
 								<span class="avatar-letter">{admin.name.charAt(0).toUpperCase()}</span>
@@ -130,13 +131,6 @@
 							<span class="material-symbols-rounded" slot="leading-icon">lock</span>
 						</md-outlined-text-field>
 					</div>
-
-					{#if error}
-						<div class="error-banner">
-							<span class="material-symbols-rounded">error</span>
-							<span class="md-body-medium">{error}</span>
-						</div>
-					{/if}
 
 					<div class="actions">
 						<md-text-button onclick={handleBack} disabled={loading}>
@@ -347,18 +341,6 @@
 	.passcode-input-container md-outlined-text-field {
 		width: 100%;
 	}
-
-	.error-banner {
-		display: flex;
-		align-items: center;
-		gap: var(--md-sys-spacing-sm);
-		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
-		background: var(--md-sys-color-error-container);
-		color: var(--md-sys-color-on-error-container);
-		border-radius: var(--md-sys-shape-corner-small);
-	}
-
-	.error-banner .material-symbols-rounded { font-size: 20px; }
 
 	.actions {
 		display: flex;
