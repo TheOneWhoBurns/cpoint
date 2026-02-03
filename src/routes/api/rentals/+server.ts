@@ -17,7 +17,7 @@ interface ReservationItem {
 const MAX_ITEMS_PER_RENTAL = 50;
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const { productId, customer, items, rentalType, quantity = 1, shiftId, guideId = null, overrideReservationIds, operatorPasscode, fromReservationId } = await request.json();
+	const { productId, customer, items, rentalType, quantity = 1, shiftId, guideId = null, overrideReservationIds, operatorPasscode, overrideOperatorId, fromReservationId } = await request.json();
 
 	if (!productId) {
 		return json({ error: 'Product ID required' }, { status: 400 });
@@ -139,16 +139,26 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			if (conflicts.length > 0) {
 				// If override requested, verify passcode
 				if (overrideReservationIds && operatorPasscode) {
-					const allOperators = await db
-						.select()
-						.from(operators)
-						.where(eq(operators.isActive, true));
-
 					let overrideValid = false;
-					for (const op of allOperators) {
-						if (await verifyPasscode(operatorPasscode, op.passcode)) {
-							overrideValid = true;
-							break;
+
+					if (overrideOperatorId) {
+						const [op] = await db
+							.select()
+							.from(operators)
+							.where(eq(operators.id, overrideOperatorId));
+						if (op && op.isActive) {
+							overrideValid = await verifyPasscode(operatorPasscode, op.passcode);
+						}
+					} else {
+						const allOperators = await db
+							.select()
+							.from(operators)
+							.where(eq(operators.isActive, true));
+						for (const op of allOperators) {
+							if (await verifyPasscode(operatorPasscode, op.passcode)) {
+								overrideValid = true;
+								break;
+							}
 						}
 					}
 
@@ -276,76 +286,78 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 
 			const oldItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
-
-			// Validate new items availability (excluding items already in this rental)
 			const oldTrackedIds = new Set(oldItems.filter(i => i.type === 'tracked' && i.itemId).map(i => i.itemId));
 			const newTrackedIds = new Set(newItems.filter((i: any) => i.type === 'tracked' && i.itemId).map((i: any) => i.itemId));
 
-			for (const item of newItems) {
-				if (item.type === 'tracked' && !oldTrackedIds.has(item.itemId)) {
-					const [tracked] = await db.select().from(trackedItems).where(eq(trackedItems.id, item.itemId));
-					if (!tracked || tracked.status !== 'available') {
-						return json({ error: `Item ${item.code || item.itemId} is no longer available` }, { status: 400 });
-					}
-				} else if (item.type === 'generic') {
-					const oldGeneric = oldItems.find(i => i.type === 'generic' && i.categoryId === item.categoryId);
-					const oldQty = oldGeneric?.quantity || 0;
-					const newQty = item.quantity || 1;
-					const additionalNeeded = newQty - oldQty;
-					if (additionalNeeded > 0) {
-						const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
-						if (!cat) {
-							return json({ error: 'Category not found' }, { status: 400 });
+			const inventoryResult = await db.transaction(async (tx) => {
+				for (const item of newItems) {
+					if (item.type === 'tracked' && !oldTrackedIds.has(item.itemId)) {
+						const [tracked] = await tx.select().from(trackedItems).where(eq(trackedItems.id, item.itemId));
+						if (!tracked || tracked.status !== 'available') {
+							return { error: `Item ${item.code || item.itemId} is no longer available`, status: 400 };
 						}
-						if ((cat.availableQuantity ?? 0) < additionalNeeded) {
-							return json({ error: `Not enough ${cat.name} available (need ${additionalNeeded} more, have ${cat.availableQuantity})` }, { status: 400 });
+					} else if (item.type === 'generic') {
+						const oldGeneric = oldItems.find(i => i.type === 'generic' && i.categoryId === item.categoryId);
+						const oldQty = oldGeneric?.quantity || 0;
+						const newQty = item.quantity || 1;
+						const additionalNeeded = newQty - oldQty;
+						if (additionalNeeded > 0) {
+							const [cat] = await tx.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
+							if (!cat) {
+								return { error: 'Category not found', status: 400 };
+							}
+							if ((cat.availableQuantity ?? 0) < additionalNeeded) {
+								return { error: `Not enough ${cat.name} available (need ${additionalNeeded} more, have ${cat.availableQuantity})`, status: 400 };
+							}
 						}
 					}
 				}
-			}
 
-			// Release tracked items that were removed
-			for (const item of oldItems) {
-				if (item.type === 'tracked' && item.itemId && !newTrackedIds.has(item.itemId)) {
-					await db.update(trackedItems).set({ status: 'available' }).where(eq(trackedItems.id, item.itemId));
-				}
-			}
-
-			// Claim tracked items that were added
-			for (const item of newItems) {
-				if (item.type === 'tracked' && item.itemId && !oldTrackedIds.has(item.itemId)) {
-					await db.update(trackedItems).set({ status: 'rented' }).where(eq(trackedItems.id, item.itemId));
-				}
-			}
-
-			// Adjust generic item quantities
-			const oldGenericMap = new Map<number, number>();
-			for (const item of oldItems) {
-				if (item.type === 'generic' && item.categoryId) {
-					oldGenericMap.set(item.categoryId, (oldGenericMap.get(item.categoryId) || 0) + (item.quantity || 1));
-				}
-			}
-			const newGenericMap = new Map<number, number>();
-			for (const item of newItems) {
-				if (item.type === 'generic' && item.categoryId) {
-					newGenericMap.set(item.categoryId, (newGenericMap.get(item.categoryId) || 0) + (item.quantity || 1));
-				}
-			}
-
-			// Process all categories that changed
-			const allCategoryIds = new Set([...oldGenericMap.keys(), ...newGenericMap.keys()]);
-			for (const catId of allCategoryIds) {
-				const oldQty = oldGenericMap.get(catId) || 0;
-				const newQty = newGenericMap.get(catId) || 0;
-				const diff = newQty - oldQty;
-				if (diff !== 0) {
-					const [cat] = await db.select().from(productTypes).where(eq(productTypes.id, catId));
-					if (cat) {
-						await db.update(productTypes)
-							.set({ availableQuantity: (cat.availableQuantity ?? 0) - diff })
-							.where(eq(productTypes.id, catId));
+				for (const item of oldItems) {
+					if (item.type === 'tracked' && item.itemId && !newTrackedIds.has(item.itemId)) {
+						await tx.update(trackedItems).set({ status: 'available' }).where(eq(trackedItems.id, item.itemId));
 					}
 				}
+
+				for (const item of newItems) {
+					if (item.type === 'tracked' && item.itemId && !oldTrackedIds.has(item.itemId)) {
+						await tx.update(trackedItems).set({ status: 'rented' }).where(eq(trackedItems.id, item.itemId));
+					}
+				}
+
+				const oldGenericMap = new Map<number, number>();
+				for (const item of oldItems) {
+					if (item.type === 'generic' && item.categoryId) {
+						oldGenericMap.set(item.categoryId, (oldGenericMap.get(item.categoryId) || 0) + (item.quantity || 1));
+					}
+				}
+				const newGenericMap = new Map<number, number>();
+				for (const item of newItems) {
+					if (item.type === 'generic' && item.categoryId) {
+						newGenericMap.set(item.categoryId, (newGenericMap.get(item.categoryId) || 0) + (item.quantity || 1));
+					}
+				}
+
+				const allCategoryIds = new Set([...oldGenericMap.keys(), ...newGenericMap.keys()]);
+				for (const catId of allCategoryIds) {
+					const oldQty = oldGenericMap.get(catId) || 0;
+					const newQty = newGenericMap.get(catId) || 0;
+					const diff = newQty - oldQty;
+					if (diff !== 0) {
+						const [cat] = await tx.select().from(productTypes).where(eq(productTypes.id, catId));
+						if (cat) {
+							await tx.update(productTypes)
+								.set({ availableQuantity: (cat.availableQuantity ?? 0) - diff })
+								.where(eq(productTypes.id, catId));
+						}
+					}
+				}
+
+				return { success: true };
+			});
+
+			if ('error' in inventoryResult) {
+				return json({ error: inventoryResult.error }, { status: inventoryResult.status });
 			}
 
 			updates.items = newItems;

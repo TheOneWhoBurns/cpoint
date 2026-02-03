@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
@@ -31,7 +31,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	const [operator] = await db
 		.select()
 		.from(operators)
-		.where(eq(operators.id, operatorId));
+		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true)));
 
 	if (!operator) {
 		logAuthFailure('/api/operators/verify', String(operatorId), clientIp);

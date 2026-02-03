@@ -18,7 +18,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Invalid session' }, { status: 401 });
 	}
 
-	const { shiftId, productId, quantity } = await request.json();
+	let body;
+	try {
+		body = await request.json();
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
+	}
+
+	const { shiftId, productId, quantity } = body;
 
 	if (!shiftId) {
 		return json({ error: 'Shift ID required' }, { status: 400 });
@@ -85,6 +92,14 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		return json({ error: 'Not logged in' }, { status: 401 });
 	}
 
+	const operatorId = parseInt(operatorIdStr);
+	const [operator] = await db.select({ id: operators.id }).from(operators)
+		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true)));
+	if (!operator) {
+		cookies.delete('operatorId', { path: '/' });
+		return json({ error: 'Invalid session' }, { status: 401 });
+	}
+
 	const shiftIdStr = url.searchParams.get('shiftId');
 
 	if (!shiftIdStr) {
@@ -92,6 +107,12 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	const shiftId = parseInt(shiftIdStr);
+
+	const [shift] = await db.select().from(shifts)
+		.where(and(eq(shifts.id, shiftId), eq(shifts.operatorId, operatorId)));
+	if (!shift) {
+		return json({ error: 'Shift not found or not yours' }, { status: 403 });
+	}
 
 	const sales = await db
 		.select()
