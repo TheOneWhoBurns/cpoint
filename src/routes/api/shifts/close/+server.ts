@@ -173,8 +173,8 @@ export const POST: RequestHandler = async ({ cookies }) => {
 	const salesData = shiftSales.map(s => ({
 		'Product': s.productName || 'Unknown',
 		'Quantity': s.quantity,
-		'Unit Price ($)': (s.unitPrice / 100).toFixed(2),
-		'Total ($)': (s.total / 100).toFixed(2),
+		'Unit Price ($)': Math.round(s.unitPrice / 100),
+		'Total ($)': Math.round(s.total / 100),
 		'Time': s.createdAt ? new Date(s.createdAt).toLocaleString() : ''
 	}));
 
@@ -182,31 +182,31 @@ export const POST: RequestHandler = async ({ cookies }) => {
 		'Product': '',
 		'Quantity': '' as any,
 		'Unit Price ($)': 'TOTALS:',
-		'Total ($)': (salesRevenue / 100).toFixed(2),
+		'Total ($)': Math.round(salesRevenue / 100),
 		'Time': `${shiftSales.length} sales`
 	});
 
 	// Store sales cash/credit split (assuming all store sales are cash for now, can be enhanced)
-	const storeSalesCash = salesRevenue / 100; // Convert from cents to dollars
+	const storeSalesCash = Math.round(salesRevenue / 100); // Convert from cents to dollars
 	const storeSalesCredit = 0; // Would need to track payment method for store sales
 
 	// Create summary/small box data
 	const summaryData = [
 		{ 'Category': 'RENTALS', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Collected Cash', 'Cash ($)': cashTotal.toFixed(2), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Collected Credit', 'Cash ($)': '', 'Credit ($)': creditTotal.toFixed(2), 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Unpaid (Yet to Pay)', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': '' },
-		{ 'Category': 'Discounts Given', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': discountTotal.toFixed(2) },
-		{ 'Category': 'Rental Subtotal', 'Cash ($)': cashTotal.toFixed(2), 'Credit ($)': creditTotal.toFixed(2), 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': finalTotal.toFixed(2) },
+		{ 'Category': 'Collected Cash', 'Cash ($)': cashTotal, 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Collected Credit', 'Cash ($)': '', 'Credit ($)': creditTotal, 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Unpaid (Yet to Pay)', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal, 'Total ($)': '' },
+		{ 'Category': 'Discounts Given', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': discountTotal },
+		{ 'Category': 'Rental Subtotal', 'Cash ($)': cashTotal, 'Credit ($)': creditTotal, 'Unpaid ($)': unpaidTotal, 'Total ($)': finalTotal },
 		{ 'Category': '', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
 		{ 'Category': 'STORE SALES', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Store Sales Total', 'Cash ($)': storeSalesCash.toFixed(2), 'Credit ($)': storeSalesCredit.toFixed(2), 'Unpaid ($)': '0.00', 'Total ($)': (salesRevenue / 100).toFixed(2) },
+		{ 'Category': 'Store Sales Total', 'Cash ($)': storeSalesCash, 'Credit ($)': storeSalesCredit, 'Unpaid ($)': 0, 'Total ($)': Math.round(salesRevenue / 100) },
 		{ 'Category': '', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
 		{ 'Category': 'SMALL BOX SUMMARY', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Total Cash Collected', 'Cash ($)': (cashTotal + storeSalesCash).toFixed(2), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Total Credit Collected', 'Cash ($)': '', 'Credit ($)': (creditTotal + storeSalesCredit).toFixed(2), 'Unpaid ($)': '', 'Total ($)': '' },
-		{ 'Category': 'Total Unpaid', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': '' },
-		{ 'Category': 'GRAND TOTAL', 'Cash ($)': (cashTotal + storeSalesCash).toFixed(2), 'Credit ($)': (creditTotal + storeSalesCredit).toFixed(2), 'Unpaid ($)': unpaidTotal.toFixed(2), 'Total ($)': (finalTotal + salesRevenue / 100).toFixed(2) },
+		{ 'Category': 'Total Cash Collected', 'Cash ($)': (cashTotal + storeSalesCash), 'Credit ($)': '', 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Total Credit Collected', 'Cash ($)': '', 'Credit ($)': (creditTotal + storeSalesCredit), 'Unpaid ($)': '', 'Total ($)': '' },
+		{ 'Category': 'Total Unpaid', 'Cash ($)': '', 'Credit ($)': '', 'Unpaid ($)': unpaidTotal, 'Total ($)': '' },
+		{ 'Category': 'GRAND TOTAL', 'Cash ($)': (cashTotal + storeSalesCash), 'Credit ($)': (creditTotal + storeSalesCredit), 'Unpaid ($)': unpaidTotal, 'Total ($)': Math.round(finalTotal + salesRevenue / 100) },
 	];
 
 	const wb = XLSX.utils.book_new();
