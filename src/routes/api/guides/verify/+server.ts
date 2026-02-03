@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { guides } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { verifyPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -17,7 +18,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'Guide not found' }, { status: 404 });
 	}
 
-	if (guide.passcode !== passcode) {
+	if (!verifyPasscode(passcode, guide.passcode)) {
 		return json({ error: 'Invalid passcode' }, { status: 401 });
 	}
 

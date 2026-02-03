@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators, shifts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { verifyPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
@@ -20,7 +21,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Operator not found' }, { status: 404 });
 	}
 
-	if (operator.passcode !== passcode) {
+	if (!verifyPasscode(passcode, operator.passcode)) {
 		return json({ error: 'Invalid passcode' }, { status: 401 });
 	}
 

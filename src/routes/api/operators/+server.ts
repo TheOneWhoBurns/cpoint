@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { hashPasscode } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
@@ -31,7 +32,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const [newOperator] = await db
 		.insert(operators)
-		.values({ name, passcode, isAdmin: isAdmin || false })
+		.values({ name, passcode: hashPasscode(passcode), isAdmin: isAdmin || false })
 		.returning({
 			id: operators.id,
 			name: operators.name,
@@ -56,6 +57,18 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 	if (Object.keys(updateData).length === 0) {
 		return json({ error: 'No fields to update' }, { status: 400 });
+	}
+
+	// Prevent removing the last admin
+	if (isAdmin === false) {
+		const adminCount = await db
+			.select({ id: operators.id })
+			.from(operators)
+			.where(and(eq(operators.isAdmin, true), eq(operators.isActive, true)));
+		const isCurrentlyAdmin = adminCount.some(op => op.id === id);
+		if (isCurrentlyAdmin && adminCount.length <= 1) {
+			return json({ error: 'Cannot remove the last admin operator' }, { status: 400 });
+		}
 	}
 
 	const [updated] = await db
