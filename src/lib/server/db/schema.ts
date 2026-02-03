@@ -81,6 +81,25 @@ export const equipmentBlocks = pgTable('equipment_blocks', {
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
 
+export const reservations = pgTable('reservations', {
+	id: serial('id').primaryKey(),
+	shiftId: integer('shift_id').references(() => shifts.id),
+	status: text('status').notNull().default('active'),
+	items: jsonb('items').notNull(),
+	customer: jsonb('customer'),
+	guideId: integer('guide_id').references(() => guides.id),
+	reason: text('reason'),
+	reservedFrom: timestamp('reserved_from', { withTimezone: true }).notNull(),
+	reservedUntil: timestamp('reserved_until', { withTimezone: true }).notNull(),
+	fulfilledByRentalId: integer('fulfilled_by_rental_id').references(() => rentals.id),
+	cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+	createdBy: integer('created_by').references(() => operators.id),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => [
+	index('idx_reservations_status').on(table.status),
+	index('idx_reservations_dates').on(table.reservedFrom, table.reservedUntil)
+]);
+
 export const rentalProducts = pgTable('rental_products', {
 	id: serial('id').primaryKey(),
 	name: text('name').notNull(),
@@ -180,6 +199,8 @@ export type RentalProduct = typeof rentalProducts.$inferSelect;
 export type NewRentalProduct = typeof rentalProducts.$inferInsert;
 export type EquipmentBlock = typeof equipmentBlocks.$inferSelect;
 export type NewEquipmentBlock = typeof equipmentBlocks.$inferInsert;
+export type Reservation = typeof reservations.$inferSelect;
+export type NewReservation = typeof reservations.$inferInsert;
 export type ActionLogEntry = typeof actionLog.$inferSelect;
 export type NewActionLogEntry = typeof actionLog.$inferInsert;
 export type Guide = typeof guides.$inferSelect;

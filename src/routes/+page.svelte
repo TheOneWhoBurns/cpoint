@@ -57,6 +57,248 @@
 	let confirmDeleteTourBooking = $state(false);
 	let pendingDeleteTourBookingId = $state<number | null>(null);
 
+	// Reservation state
+	let showReservationModal = $state(false);
+	let reservationProductId = $state<number | null>(null);
+	let reservationTrackedItems = $state<Record<number, number[]>>({});
+	let reservationIncludedGenericItems = $state<Record<number, boolean>>({});
+	let reservationSearchQueries = $state<Record<number, string>>({});
+	let reservationQuantity = $state(1);
+	let reservationCustomerName = $state('');
+	let reservationCustomerHotel = $state('');
+	let reservationCustomerPhone = $state('');
+	let reservationReason = $state('');
+	let reservationFrom = $state('');
+	let reservationUntil = $state('');
+	let reservationGuideId = $state<number | null>(null);
+	let reservationError = $state('');
+	let reservationFromInput = $state<HTMLInputElement | null>(null);
+	let reservationUntilInput = $state<HTMLInputElement | null>(null);
+	let reservationFromPicker: flatpickr.Instance | null = null;
+	let reservationUntilPicker: flatpickr.Instance | null = null;
+
+	// Conflict override state
+	let showConflictModal = $state(false);
+	let conflictData = $state<any[]>([]);
+	let conflictPasscode = $state('');
+	let conflictPasscodeError = $state('');
+	let pendingRentalPayload = $state<any>(null);
+
+	// Start rental from reservation
+	let fromReservationId = $state<number | null>(null);
+
+	const reservationProduct = $derived(reservationProductId ? data.products.find(p => p.id === reservationProductId) : null);
+	const reservationEquipment = $derived<EquipmentItem[]>(reservationProduct?.equipment as EquipmentItem[] ?? []);
+
+	function getFilteredTrackedItemsForReservation(categoryId: number) {
+		const items = data.trackedItems.filter(t => t.productTypeId === categoryId && t.status === 'available');
+		const query = reservationSearchQueries[categoryId];
+		if (!query) return items;
+		return items.filter(t => t.code.toLowerCase().includes(query.toLowerCase()));
+	}
+
+	function initReservationProductForm(product: typeof reservationProduct) {
+		if (!product) return;
+		const equipment = (product.equipment as EquipmentItem[]) ?? [];
+		reservationTrackedItems = {};
+		reservationIncludedGenericItems = {};
+		reservationSearchQueries = {};
+		for (const item of equipment) {
+			if (item.type === 'tracked') {
+				reservationSearchQueries[item.categoryId ?? 0] = '';
+			} else if (item.type === 'generic') {
+				const available = getCategoryAvailability(item.categoryId ?? 0);
+				const needed = item.quantity ?? 1;
+				reservationIncludedGenericItems[item.categoryId ?? 0] = available >= needed;
+			}
+		}
+	}
+
+	$effect(() => {
+		if (reservationProductId) {
+			untrack(() => initReservationProductForm(reservationProduct));
+		}
+	});
+
+	function initReservationFlatpickr() {
+		if (reservationFromInput && !reservationFromPicker) {
+			reservationFromPicker = flatpickr(reservationFromInput, {
+				enableTime: true,
+				dateFormat: 'Y-m-d H:i',
+				minDate: 'today',
+				onChange: (dates) => {
+					if (dates[0]) reservationFrom = dates[0].toISOString();
+				}
+			});
+		}
+		if (reservationUntilInput && !reservationUntilPicker) {
+			reservationUntilPicker = flatpickr(reservationUntilInput, {
+				enableTime: true,
+				dateFormat: 'Y-m-d H:i',
+				minDate: 'today',
+				onChange: (dates) => {
+					if (dates[0]) reservationUntil = dates[0].toISOString();
+				}
+			});
+		}
+	}
+
+	function destroyReservationFlatpickr() {
+		reservationFromPicker?.destroy();
+		reservationFromPicker = null;
+		reservationUntilPicker?.destroy();
+		reservationUntilPicker = null;
+	}
+
+	function openReservationModal() {
+		showReservationModal = true;
+		reservationError = '';
+		reservationProductId = null;
+		reservationTrackedItems = {};
+		reservationIncludedGenericItems = {};
+		reservationSearchQueries = {};
+		reservationQuantity = 1;
+		reservationCustomerName = '';
+		reservationCustomerHotel = '';
+		reservationCustomerPhone = '';
+		reservationReason = '';
+		reservationFrom = '';
+		reservationUntil = '';
+		reservationGuideId = null;
+		fromReservationId = null;
+		setTimeout(initReservationFlatpickr, 0);
+	}
+
+	function closeReservationModal() {
+		showReservationModal = false;
+		destroyReservationFlatpickr();
+	}
+
+	async function createReservation() {
+		if (!reservationProductId) {
+			reservationError = 'Select a product';
+			return;
+		}
+		if (!reservationFrom || !reservationUntil) {
+			reservationError = 'Start and end times required';
+			return;
+		}
+
+		// Build items
+		const equipment = reservationEquipment;
+		const resItems = equipment.map(item => {
+			if (item.type === 'tracked') {
+				const selectedIds = reservationTrackedItems[item.categoryId ?? 0] || [];
+				return selectedIds.map(selectedId => {
+					const selected = data.trackedItems.find(t => t.id === selectedId);
+					return { type: 'tracked', itemId: selectedId, code: selected?.code, name: item.name, categoryId: item.categoryId };
+				});
+			}
+			if (!reservationIncludedGenericItems[item.categoryId ?? 0]) return null;
+			return { type: 'generic', categoryId: item.categoryId, name: item.name, quantity: (item.quantity ?? 1) * reservationQuantity };
+		}).flat().filter(Boolean);
+
+		if (resItems.length === 0) {
+			reservationError = 'Select at least one equipment item';
+			return;
+		}
+
+		loading = true;
+		reservationError = '';
+
+		const res = await fetch('/api/reservations', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				items: resItems,
+				customer: reservationCustomerName ? { name: reservationCustomerName, hotel: reservationCustomerHotel, phone: reservationCustomerPhone } : null,
+				reason: reservationReason || null,
+				reservedFrom: reservationFrom,
+				reservedUntil: reservationUntil,
+				guideId: reservationGuideId || null,
+				shiftId: $shiftStore.shift?.id
+			})
+		});
+
+		if (res.ok) {
+			closeReservationModal();
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			reservationError = d.error || 'Failed to create reservation';
+		}
+		loading = false;
+	}
+
+	async function cancelReservation(id: number) {
+		loading = true;
+		const res = await fetch('/api/reservations', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ id, action: 'cancel' })
+		});
+		if (res.ok) {
+			await invalidateAll();
+		}
+		loading = false;
+	}
+
+	function startRentalFromReservation(reservation: any) {
+		const resItems = reservation.items as EquipmentItem[];
+		const resCustomer = reservation.customer as { name?: string; hotel?: string; phone?: string } | null;
+
+		// Find matching product
+		showForm = true;
+		error = '';
+		fromReservationId = reservation.id;
+
+		// Pre-fill customer info
+		customerName = resCustomer?.name || '';
+		customerHotel = resCustomer?.hotel || '';
+		customerPhone = resCustomer?.phone || '';
+
+		// Pre-fill guide
+		selectedGuideId = reservation.guideId || null;
+
+		// Try to find matching product and pre-select equipment
+		// We need to find which product matches the reservation items
+		for (const product of data.products) {
+			const productEquip = product.equipment as EquipmentItem[];
+			if (!productEquip) continue;
+
+			// Check if reservation items match this product's equipment categories
+			const productCategoryIds = productEquip.map(e => e.categoryId).filter(Boolean).sort();
+			const resCategoryIds = [...new Set(resItems.map(i => i.categoryId).filter(Boolean))].sort();
+
+			if (JSON.stringify(productCategoryIds) === JSON.stringify(resCategoryIds)) {
+				selectedProductId = product.id;
+
+				// Wait for product form to init, then set tracked items
+				setTimeout(() => {
+					for (const item of resItems) {
+						if (item.type === 'tracked' && item.itemId) {
+							const catId = item.categoryId ?? 0;
+							if (!selectedTrackedItems[catId]) selectedTrackedItems[catId] = [];
+							selectedTrackedItems[catId] = [...selectedTrackedItems[catId], item.itemId];
+						} else if (item.type === 'generic') {
+							includedGenericItems[item.categoryId ?? 0] = true;
+						}
+					}
+					selectedTrackedItems = selectedTrackedItems;
+				}, 100);
+				break;
+			}
+		}
+	}
+
+	function formatReservationDate(date: string): string {
+		return new Date(date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+	}
+
+	function isReservationExpired(until: string): boolean {
+		return new Date(until) < new Date();
+	}
+
 	let activityDateInput = $state<HTMLInputElement | null>(null);
 	let activityDatePicker: flatpickr.Instance | null = null;
 
@@ -326,6 +568,7 @@
 		rentalType = 'hourly';
 		rentalQuantity = 1;
 		selectedGuideId = null;
+		fromReservationId = null;
 		error = '';
 	}
 
@@ -362,26 +605,78 @@
 			return { type: 'generic', categoryId: item.categoryId, name: item.name, quantity: (item.quantity ?? 1) * rentalQuantity };
 		}).flat().filter(Boolean);
 
+		const payload = {
+			productId: selectedProductId,
+			shiftId: $shiftStore.shift?.id,
+			customer: { name: customerName, hotel: customerHotel, phone: customerPhone, id: customerId },
+			items: rentalItems,
+			rentalType,
+			quantity: rentalQuantity,
+			guideId: selectedGuideId || null,
+			fromReservationId: fromReservationId || undefined
+		};
+
 		const res = await fetch('/api/rentals', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				productId: selectedProductId,
-				shiftId: $shiftStore.shift?.id,
-				customer: { name: customerName, hotel: customerHotel, phone: customerPhone, id: customerId },
-				items: rentalItems,
-				rentalType,
-				quantity: rentalQuantity,
-				guideId: selectedGuideId || null
-			})
+			body: JSON.stringify(payload)
 		});
 
 		if (res.ok) {
+			fromReservationId = null;
 			resetForm();
 			await invalidateAll();
+		} else if (res.status === 409) {
+			const d = await res.json();
+			if (d.error === 'reservation_conflict') {
+				// Show conflict modal for passcode override
+				conflictData = d.conflicts;
+				pendingRentalPayload = payload;
+				conflictPasscode = '';
+				conflictPasscodeError = '';
+				showConflictModal = true;
+			} else {
+				error = d.error || 'Conflict error';
+			}
 		} else {
 			const d = await res.json();
 			error = d.error || 'Failed to create rental';
+		}
+		loading = false;
+	}
+
+	async function overrideConflictAndCreateRental() {
+		if (!conflictPasscode || conflictPasscode.length !== 4) {
+			conflictPasscodeError = 'Enter 4-digit passcode';
+			return;
+		}
+
+		loading = true;
+		conflictPasscodeError = '';
+
+		const payload = {
+			...pendingRentalPayload,
+			overrideReservationIds: conflictData.map((c: any) => c.id),
+			operatorPasscode: conflictPasscode
+		};
+
+		const res = await fetch('/api/rentals', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload)
+		});
+
+		if (res.ok) {
+			showConflictModal = false;
+			fromReservationId = null;
+			resetForm();
+			await invalidateAll();
+		} else if (res.status === 403) {
+			conflictPasscodeError = 'Invalid passcode';
+		} else {
+			const d = await res.json();
+			error = d.error || 'Failed to create rental';
+			showConflictModal = false;
 		}
 		loading = false;
 	}
@@ -515,10 +810,14 @@
 		<main class="app-main">
 			<!-- Action Bar -->
 			<div class="action-bar">
-				<md-filled-button onclick={() => { showForm = true; error = ''; }}>
+				<md-filled-button onclick={() => { showForm = true; error = ''; fromReservationId = null; }}>
 					<span class="material-symbols-rounded" slot="icon">add</span>
 					New Rental
 				</md-filled-button>
+				<md-filled-tonal-button onclick={openReservationModal}>
+					<span class="material-symbols-rounded" slot="icon">event</span>
+					New Reservation
+				</md-filled-tonal-button>
 				{#if data.storeProducts.length > 0}
 					<md-filled-tonal-button onclick={() => { showStoreSaleModal = true; saleError = ''; }}>
 						<span class="material-symbols-rounded" slot="icon">shopping_cart</span>
@@ -616,6 +915,87 @@
 					</div>
 				{/if}
 			</section>
+
+			<!-- Reservations Section -->
+			{#if data.reservations.length > 0}
+				<section class="rentals-section reservation-section">
+					<div class="section-header">
+						<span class="material-symbols-rounded">event</span>
+						<h2 class="md-title-large">Reservations</h2>
+						<span class="count-badge md-label-medium">{data.reservations.length}</span>
+					</div>
+
+					<div class="rentals-grid">
+						{#each data.reservations as reservation}
+							{@const resCustomer = reservation.customer as {name?: string, hotel?: string} | null}
+							{@const resItems = reservation.items as Array<{name: string, quantity?: number, code?: string}>}
+							{@const expired = isReservationExpired(reservation.reservedUntil)}
+							<div class="rental-card reservation-card" class:expired>
+								<div class="rental-header">
+									<div class="customer-info">
+										<span class="material-symbols-rounded customer-icon reservation-icon">event</span>
+										<div class="customer-details">
+											<span class="md-title-medium">{resCustomer?.name || reservation.reason || 'Reservation'}</span>
+											{#if resCustomer?.hotel}
+												<span class="md-body-small hotel-text">
+													<span class="material-symbols-rounded icon-xs">hotel</span>
+													{resCustomer.hotel}
+												</span>
+											{/if}
+											{#if reservation.reason && resCustomer?.name}
+												<span class="md-body-small hotel-text">{reservation.reason}</span>
+											{/if}
+										</div>
+									</div>
+									<div class="rental-type-badge reservation-badge" class:expired>
+										{expired ? 'Expired' : 'Reserved'}
+									</div>
+								</div>
+
+								<div class="rental-items-list">
+									{#each resItems as item}
+										<div class="item-chip">
+											<span class="material-symbols-rounded icon-sm">
+												{item.code ? 'qr_code_2' : 'inventory_2'}
+											</span>
+											<span class="md-body-small">
+												{item.name}{item.code ? ` (${item.code})` : ''}{item.quantity ? ` x${item.quantity}` : ''}
+											</span>
+										</div>
+									{/each}
+								</div>
+
+								<div class="reservation-dates">
+									<div class="time-row">
+										<span class="material-symbols-rounded icon-xs">event</span>
+										<span class="md-body-small">From: {formatReservationDate(reservation.reservedFrom)}</span>
+									</div>
+									<div class="time-row">
+										<span class="material-symbols-rounded icon-xs">event_busy</span>
+										<span class="md-body-small">Until: {formatReservationDate(reservation.reservedUntil)}</span>
+									</div>
+								</div>
+
+								<div class="rental-footer">
+									<div class="time-info">
+										<span class="material-symbols-rounded icon-sm">schedule</span>
+										<span class="md-body-small">Created {new Date(reservation.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+									</div>
+									<div class="rental-actions">
+										<md-icon-button onclick={() => cancelReservation(reservation.id)} disabled={loading} aria-label="Cancel reservation">
+											<span class="material-symbols-rounded delete-icon">cancel</span>
+										</md-icon-button>
+										<md-filled-tonal-button onclick={() => startRentalFromReservation(reservation)} disabled={loading}>
+											<span class="material-symbols-rounded" slot="icon">play_arrow</span>
+											Start Rental
+										</md-filled-tonal-button>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</section>
+			{/if}
 
 			<!-- Previous Shift Rentals Section -->
 			<section class="rentals-section previous-section">
@@ -758,8 +1138,8 @@
 				<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
 					<div class="modal-header">
 						<div class="modal-title">
-							<span class="material-symbols-rounded">add_shopping_cart</span>
-							<h2 class="md-headline-small">Create Rental</h2>
+							<span class="material-symbols-rounded">{fromReservationId ? 'event' : 'add_shopping_cart'}</span>
+							<h2 class="md-headline-small">{fromReservationId ? 'Start Rental from Reservation' : 'Create Rental'}</h2>
 						</div>
 						<md-icon-button onclick={resetForm}>
 							<span class="material-symbols-rounded">close</span>
@@ -1377,6 +1757,333 @@
 	onSave={executeEditRental}
 	onCancel={() => { editRentalModalOpen = false; }}
 />
+
+<!-- Reservation Conflict Override Modal -->
+{#if showConflictModal}
+	<div class="modal-overlay" onclick={() => { showConflictModal = false; }} style="z-index: 300;">
+		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+			<div class="modal-header">
+				<div class="modal-title">
+					<span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
+					<h2 class="md-headline-small">Reservation Conflict</h2>
+				</div>
+				<md-icon-button onclick={() => { showConflictModal = false; }}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
+			</div>
+
+			<div class="modal-body">
+				<div class="conflict-warning">
+					<p class="md-body-medium">The selected equipment conflicts with the following reservation(s). Proceeding will override these holds.</p>
+				</div>
+
+				{#each conflictData as conflict}
+					{@const conflictCustomer = conflict.customer as {name?: string} | null}
+					<div class="conflict-card">
+						<div class="conflict-header">
+							<span class="material-symbols-rounded">event</span>
+							<span class="md-title-medium">{conflictCustomer?.name || conflict.reason || `Reservation #${conflict.id}`}</span>
+						</div>
+						{#if conflict.reason && conflictCustomer?.name}
+							<p class="md-body-small" style="margin: 0; color: var(--md-sys-color-on-surface-variant);">{conflict.reason}</p>
+						{/if}
+						<div class="conflict-dates">
+							<span class="md-body-small">
+								{formatReservationDate(conflict.reservedFrom)} — {formatReservationDate(conflict.reservedUntil)}
+							</span>
+						</div>
+						<div class="rental-items-list">
+							{#each conflict.items as item}
+								<div class="item-chip">
+									<span class="material-symbols-rounded icon-sm">qr_code_2</span>
+									<span class="md-body-small">{item.name}{item.code ? ` (${item.code})` : ''}</span>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/each}
+
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">lock</span>
+						<span class="md-title-small">Enter passcode to override</span>
+					</label>
+					<div class="passcode-input-row">
+						<input
+							type="password"
+							maxlength="4"
+							placeholder="4-digit passcode"
+							bind:value={conflictPasscode}
+							class="passcode-input"
+						/>
+					</div>
+					{#if conflictPasscodeError}
+						<div class="error-banner">
+							<span class="material-symbols-rounded">error</span>
+							<span class="md-body-medium">{conflictPasscodeError}</span>
+						</div>
+					{/if}
+				</div>
+			</div>
+
+			<div class="modal-footer">
+				<md-outlined-button onclick={() => { showConflictModal = false; }} disabled={loading}>Cancel</md-outlined-button>
+				<md-filled-button class="danger-btn" onclick={overrideConflictAndCreateRental} disabled={loading || conflictPasscode.length !== 4}>
+					<span class="material-symbols-rounded" slot="icon">warning</span>
+					Override & Create Rental
+				</md-filled-button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Create Reservation Modal -->
+{#if showReservationModal}
+	<div class="modal-overlay" onclick={closeReservationModal}>
+		<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+			<div class="modal-header">
+				<div class="modal-title">
+					<span class="material-symbols-rounded">event</span>
+					<h2 class="md-headline-small">New Reservation</h2>
+				</div>
+				<md-icon-button onclick={closeReservationModal}>
+					<span class="material-symbols-rounded">close</span>
+				</md-icon-button>
+			</div>
+
+			<div class="modal-body">
+				<!-- Product Selection -->
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">category</span>
+						<span class="md-title-small">Select Product</span>
+					</label>
+					<select class="form-select" bind:value={reservationProductId} disabled={loading}>
+						<option value={null}>Choose a rental product...</option>
+						{#each data.products as product}
+							<option value={product.id}>{product.name}</option>
+						{/each}
+					</select>
+				</div>
+
+				<!-- Quantity -->
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">numbers</span>
+						<span class="md-title-small">Quantity</span>
+					</label>
+					<div class="quantity-control">
+						<button class="qty-btn" onclick={() => reservationQuantity = Math.max(1, reservationQuantity - 1)} disabled={loading || reservationQuantity <= 1} aria-label="Decrease quantity">
+							<span class="material-symbols-rounded">remove</span>
+						</button>
+						<span class="qty-value md-title-large">{reservationQuantity}</span>
+						<button class="qty-btn" onclick={() => reservationQuantity = Math.min(10, reservationQuantity + 1)} disabled={loading || reservationQuantity >= 10} aria-label="Increase quantity">
+							<span class="material-symbols-rounded">add</span>
+						</button>
+					</div>
+				</div>
+
+				{#if reservationProduct}
+					<!-- Equipment Selection -->
+					<div class="form-section">
+						<label class="form-label">
+							<span class="material-symbols-rounded">handyman</span>
+							<span class="md-title-small">Equipment</span>
+						</label>
+						<div class="equipment-list">
+							{#each reservationEquipment as item}
+								{#if item.type === 'tracked'}
+									<div class="equipment-card tracked">
+										<div class="equipment-header">
+											<span class="material-symbols-rounded">qr_code_2</span>
+											<span class="md-body-medium">{item.name}</span>
+											<span class="need-badge">need {reservationQuantity}</span>
+										</div>
+										<input
+											type="text"
+											placeholder="Search by code..."
+											value={reservationSearchQueries[item.categoryId ?? 0] || ''}
+											oninput={(e) => reservationSearchQueries[item.categoryId ?? 0] = e.currentTarget.value}
+											class="search-input"
+										/>
+										{#if getFilteredTrackedItemsForReservation(item.categoryId ?? 0).length > 0}
+											<div class="tracked-items-grid">
+												{#each getFilteredTrackedItemsForReservation(item.categoryId ?? 0) as available}
+													{@const isSelected = reservationTrackedItems[item.categoryId ?? 0]?.includes(available.id)}
+													<button
+														class="tracked-item-btn"
+														class:selected={isSelected}
+														onclick={() => {
+															const ids = reservationTrackedItems[item.categoryId ?? 0] || [];
+															if (ids.includes(available.id)) {
+																reservationTrackedItems[item.categoryId ?? 0] = ids.filter(id => id !== available.id);
+															} else if (ids.length < reservationQuantity) {
+																reservationTrackedItems[item.categoryId ?? 0] = [...ids, available.id];
+															}
+															reservationTrackedItems = reservationTrackedItems;
+														}}
+														disabled={!isSelected && (reservationTrackedItems[item.categoryId ?? 0]?.length ?? 0) >= reservationQuantity}
+														aria-pressed={isSelected}
+													>
+														<span class="material-symbols-rounded">{isSelected ? 'check_circle' : 'radio_button_unchecked'}</span>
+														<span class="md-label-large">{available.code}</span>
+													</button>
+												{/each}
+											</div>
+										{:else}
+											<p class="no-items md-body-small">No items available</p>
+										{/if}
+										{#if (reservationTrackedItems[item.categoryId ?? 0] || []).length > 0}
+											<div class="selected-summary">
+												<span class="material-symbols-rounded">check</span>
+												<span class="md-body-small">
+													Selected ({(reservationTrackedItems[item.categoryId ?? 0] || []).length}/{reservationQuantity}):
+													{(reservationTrackedItems[item.categoryId ?? 0] || [])
+														.map(id => data.trackedItems.find(t => t.id === id)?.code)
+														.join(', ')}
+												</span>
+											</div>
+										{/if}
+									</div>
+								{:else}
+									{@const available = getCategoryAvailability(item.categoryId ?? 0)}
+									{@const needed = (item.quantity ?? 1) * reservationQuantity}
+									{@const canInclude = available >= needed}
+									<div class="equipment-card generic" class:unavailable={!canInclude}>
+										<label class="generic-checkbox">
+											<md-checkbox
+												checked={reservationIncludedGenericItems[item.categoryId ?? 0] && canInclude}
+												onchange={(e: Event) => reservationIncludedGenericItems[item.categoryId ?? 0] = (e.target as HTMLInputElement).checked}
+												disabled={!canInclude}
+											></md-checkbox>
+											<span class="material-symbols-rounded">inventory_2</span>
+											<span class="md-body-medium">{item.name} x{needed}</span>
+											{#if !canInclude}
+												<span class="stock-warning">
+													<span class="material-symbols-rounded icon-xs">warning</span>
+													Only {available} available
+												</span>
+											{/if}
+										</label>
+									</div>
+								{/if}
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Time Range -->
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">date_range</span>
+						<span class="md-title-small">Reservation Period</span>
+					</label>
+					<div class="reservation-dates-inputs">
+						<div class="date-input-group">
+							<label class="md-body-small">From</label>
+							<input
+								type="text"
+								class="flatpickr-input form-date-input"
+								placeholder="Select start date/time..."
+								bind:this={reservationFromInput}
+								disabled={loading}
+								readonly
+							/>
+						</div>
+						<div class="date-input-group">
+							<label class="md-body-small">Until</label>
+							<input
+								type="text"
+								class="flatpickr-input form-date-input"
+								placeholder="Select end date/time..."
+								bind:this={reservationUntilInput}
+								disabled={loading}
+								readonly
+							/>
+						</div>
+					</div>
+				</div>
+
+				<!-- Customer Info -->
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">person</span>
+						<span class="md-title-small">Customer / Contact (optional)</span>
+					</label>
+					<div class="customer-form-grid">
+						<md-outlined-text-field
+							label="Name"
+							value={reservationCustomerName}
+							oninput={(e: Event) => reservationCustomerName = (e.target as HTMLInputElement).value}
+							disabled={loading}
+						>
+							<span class="material-symbols-rounded" slot="leading-icon">badge</span>
+						</md-outlined-text-field>
+						<md-outlined-text-field
+							label="Hotel"
+							value={reservationCustomerHotel}
+							oninput={(e: Event) => reservationCustomerHotel = (e.target as HTMLInputElement).value}
+							disabled={loading}
+						>
+							<span class="material-symbols-rounded" slot="leading-icon">hotel</span>
+						</md-outlined-text-field>
+						<md-outlined-text-field
+							label="Phone"
+							type="tel"
+							value={reservationCustomerPhone}
+							oninput={(e: Event) => reservationCustomerPhone = (e.target as HTMLInputElement).value}
+							disabled={loading}
+						>
+							<span class="material-symbols-rounded" slot="leading-icon">phone</span>
+						</md-outlined-text-field>
+					</div>
+				</div>
+
+				<!-- Reason -->
+				<div class="form-section">
+					<label class="form-label">
+						<span class="material-symbols-rounded">note</span>
+						<span class="md-title-small">Reason</span>
+					</label>
+					<md-outlined-text-field
+						label="e.g. VIP tour, Influencer collab..."
+						value={reservationReason}
+						oninput={(e: Event) => reservationReason = (e.target as HTMLInputElement).value}
+						disabled={loading}
+					>
+						<span class="material-symbols-rounded" slot="leading-icon">description</span>
+					</md-outlined-text-field>
+				</div>
+
+				{#if reservationProduct?.requiresGuide}
+					<div class="form-section">
+						<GuideSelector
+							guides={data.guides}
+							bind:selectedGuideId={reservationGuideId}
+							loading={loading}
+							onVerifyPin={verifyGuidePin}
+						/>
+					</div>
+				{/if}
+
+				{#if reservationError}
+					<div class="error-banner">
+						<span class="material-symbols-rounded">error</span>
+						<span class="md-body-medium">{reservationError}</span>
+					</div>
+				{/if}
+			</div>
+
+			<div class="modal-footer">
+				<md-outlined-button onclick={closeReservationModal} disabled={loading}>Cancel</md-outlined-button>
+				<md-filled-button onclick={createReservation} disabled={loading}>
+					<span class="material-symbols-rounded" slot="icon">event</span>
+					Create Reservation
+				</md-filled-button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <ConfirmModal
 	bind:open={confirmEndShift}
@@ -2344,6 +3051,106 @@
 		border-width: 2px;
 	}
 
+	/* Reservation Styles */
+	.reservation-icon {
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+	}
+
+	.reservation-badge {
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+	}
+
+	.reservation-badge.expired {
+		background: var(--md-sys-color-error-container);
+		color: var(--md-sys-color-on-error-container);
+	}
+
+	.reservation-card.expired {
+		opacity: 0.6;
+	}
+
+	.reservation-dates {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.reservation-dates-inputs {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.date-input-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-xs);
+	}
+
+	.date-input-group label {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	/* Conflict Modal Styles */
+	.conflict-warning {
+		background: var(--md-sys-color-error-container);
+		color: var(--md-sys-color-on-error-container);
+		padding: var(--md-sys-spacing-md);
+		border-radius: var(--md-sys-shape-corner-medium);
+	}
+
+	.conflict-warning p {
+		margin: 0;
+	}
+
+	.conflict-card {
+		background: var(--md-sys-color-surface-container-low);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-medium);
+		padding: var(--md-sys-spacing-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.conflict-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.conflict-header .material-symbols-rounded {
+		font-size: 24px;
+		color: var(--md-sys-color-error);
+	}
+
+	.conflict-dates {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.passcode-input-row {
+		display: flex;
+		gap: var(--md-sys-spacing-sm);
+		align-items: center;
+	}
+
+	.passcode-input {
+		flex: 1;
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		border: 1px solid var(--md-sys-color-outline);
+		border-radius: var(--md-sys-shape-corner-small);
+		font: var(--md-sys-typescale-body-large);
+		background: var(--md-sys-color-surface);
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.passcode-input:focus {
+		outline: none;
+		border-color: var(--md-sys-color-primary);
+	}
+
 	/* Responsive */
 	@media (max-width: 768px) {
 		.app-header {
@@ -2381,6 +3188,10 @@
 
 		.modal-content.large {
 			max-width: 100%;
+		}
+
+		.reservation-dates-inputs {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>
