@@ -3,11 +3,14 @@
 	import { invalidateAll } from '$app/navigation';
 	import '@material/web/button/filled-button.js';
 	import '@material/web/button/outlined-button.js';
+	import '@material/web/textfield/outlined-text-field.js';
 
 	let { data } = $props();
 	let disconnecting = $state(false);
 	let error = $state('');
 	let success = $state('');
+	let shareEmail = $state(data.shareEmail);
+	let savingEmail = $state(false);
 
 	// Check URL params for feedback from OAuth callback
 	$effect(() => {
@@ -20,6 +23,9 @@
 		}
 		if (params.get('error') === 'no_code') {
 			error = 'Google authorization was cancelled.';
+		}
+		if (params.get('error') === 'not_configured') {
+			error = 'Google OAuth credentials are not configured on the server.';
 		}
 	});
 
@@ -39,6 +45,30 @@
 			error = 'Failed to disconnect.';
 		}
 		disconnecting = false;
+	}
+
+	async function handleSaveEmail() {
+		savingEmail = true;
+		error = '';
+		success = '';
+		try {
+			const res = await fetch('/api/google/share-email', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: shareEmail.trim() })
+			});
+			if (res.ok) {
+				success = shareEmail.trim()
+					? 'Share email saved. New reports will be shared with this address.'
+					: 'Share email removed.';
+				await invalidateAll();
+			} else {
+				error = 'Failed to save share email.';
+			}
+		} catch {
+			error = 'Failed to save share email.';
+		}
+		savingEmail = false;
 	}
 </script>
 
@@ -117,6 +147,35 @@
 			</div>
 		</div>
 	</section>
+
+	{#if data.googleConnected}
+		<section class="settings-section">
+			<h3 class="md-title-medium section-title">Share Reports</h3>
+			<p class="md-body-medium section-desc">
+				Optionally share newly created reports with another Google account. This grants edit access to each new spreadsheet.
+			</p>
+
+			<div class="share-card">
+				<div class="share-form">
+					<md-outlined-text-field
+						label="Share email address"
+						type="email"
+						value={shareEmail}
+						oninput={(e: Event) => { shareEmail = (e.target as HTMLInputElement).value; }}
+						placeholder="user@example.com"
+						style="flex: 1;"
+					></md-outlined-text-field>
+					<md-filled-button
+						disabled={savingEmail}
+						onclick={handleSaveEmail}
+					>
+						<span class="material-symbols-rounded" slot="icon">save</span>
+						{savingEmail ? 'Saving...' : 'Save'}
+					</md-filled-button>
+				</div>
+			</div>
+		</section>
+	{/if}
 
 	<section class="settings-section">
 		<h3 class="md-title-medium section-title">How It Works</h3>
@@ -259,6 +318,19 @@
 		font-size: 0.85em;
 	}
 
+	.share-card {
+		padding: var(--md-sys-spacing-lg);
+		background: var(--md-sys-color-surface);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		border-radius: var(--md-sys-shape-corner-large);
+	}
+
+	.share-form {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--md-sys-spacing-md);
+	}
+
 	.info-card {
 		display: flex;
 		flex-direction: column;
@@ -304,6 +376,11 @@
 		.connection-status {
 			flex-direction: column;
 			text-align: center;
+		}
+
+		.share-form {
+			flex-direction: column;
+			align-items: stretch;
 		}
 	}
 </style>

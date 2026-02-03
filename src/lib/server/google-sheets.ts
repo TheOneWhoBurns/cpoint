@@ -83,8 +83,7 @@ export async function isGoogleConnected(): Promise<boolean> {
 
 export async function disconnectGoogle() {
 	await db
-		.update(appSettings)
-		.set({ value: null, updatedAt: new Date() })
+		.delete(appSettings)
 		.where(eq(appSettings.key, 'google_tokens'));
 }
 
