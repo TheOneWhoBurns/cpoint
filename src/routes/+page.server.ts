@@ -1,21 +1,22 @@
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { rentalProducts, rentals, trackedItems, productTypes, guides, storeProducts, shifts, operators, tourAgencyProducts, tourBookings, reservations, storeSales } from '$lib/server/db/schema';
-import { eq, and, isNull, ne } from 'drizzle-orm';
+import { eq, and, isNull, ne, desc } from 'drizzle-orm';
 import type { Rental } from '$lib/server/db/schema';
 
-export const load: PageServerLoad = async ({ cookies }) => {
-	const products = await db.select().from(rentalProducts).where(eq(rentalProducts.isActive, true));
-	const allTrackedItems = await db.select().from(trackedItems);
-	const allCategories = await db.select().from(productTypes);
-	const allGuides = await db.select().from(guides).where(eq(guides.isActive, true));
-	const allStoreProducts = await db.select().from(storeProducts).where(eq(storeProducts.isActive, true));
-	const allTourProducts = await db.select().from(tourAgencyProducts).where(eq(tourAgencyProducts.isActive, true));
+const PREVIOUS_RENTALS_LIMIT = 50;
 
-	const activeReservations = await db
-		.select()
-		.from(reservations)
-		.where(eq(reservations.status, 'active'));
+export const load: PageServerLoad = async ({ cookies }) => {
+	// Run all independent reference-data queries in parallel
+	const [products, allTrackedItems, allCategories, allGuides, allStoreProducts, allTourProducts, activeReservations] = await Promise.all([
+		db.select().from(rentalProducts).where(eq(rentalProducts.isActive, true)),
+		db.select().from(trackedItems),
+		db.select().from(productTypes),
+		db.select().from(guides).where(eq(guides.isActive, true)),
+		db.select().from(storeProducts).where(eq(storeProducts.isActive, true)),
+		db.select().from(tourAgencyProducts).where(eq(tourAgencyProducts.isActive, true)),
+		db.select().from(reservations).where(eq(reservations.status, 'active'))
+	]);
 
 	const operatorIdStr = cookies.get('operatorId');
 	let activeRentals: Rental[] = [];
@@ -55,18 +56,39 @@ export const load: PageServerLoad = async ({ cookies }) => {
 			.where(and(eq(shifts.operatorId, operatorId), isNull(shifts.endedAt)));
 
 		if (currentShift) {
-			activeRentals = await db
-				.select()
-				.from(rentals)
-				.where(eq(rentals.status, 'active'));
+			// Run shift-dependent queries in parallel
+			const [rentalsResult, prevRentalsResult, tourResult] = await Promise.all([
+				db.select().from(rentals).where(eq(rentals.status, 'active')),
+				db.select().from(rentals)
+					.where(and(
+						ne(rentals.shiftId, currentShift.id),
+						eq(rentals.status, 'completed')
+					))
+					.orderBy(desc(rentals.returnedAt))
+					.limit(PREVIOUS_RENTALS_LIMIT),
+				db.select({
+						id: tourBookings.id,
+						shiftId: tourBookings.shiftId,
+						tourProductId: tourBookings.tourProductId,
+						guideId: tourBookings.guideId,
+						pax: tourBookings.pax,
+						unitPrice: tourBookings.unitPrice,
+						totalPrice: tourBookings.totalPrice,
+						cost: tourBookings.cost,
+						bookedAt: tourBookings.bookedAt,
+						activityDate: tourBookings.activityDate,
+						status: tourBookings.status,
+						createdAt: tourBookings.createdAt,
+						productName: tourAgencyProducts.name
+					})
+					.from(tourBookings)
+					.leftJoin(tourAgencyProducts, eq(tourBookings.tourProductId, tourAgencyProducts.id))
+					.where(eq(tourBookings.status, 'active'))
+			]);
 
-			previousShiftRentals = await db
-				.select()
-				.from(rentals)
-				.where(and(
-					ne(rentals.shiftId, currentShift.id),
-					eq(rentals.status, 'completed')
-				));
+			activeRentals = rentalsResult;
+			previousShiftRentals = prevRentalsResult;
+			activeTourBookings = tourResult;
 
 			shiftStoreSales = await db
 				.select({
@@ -86,26 +108,6 @@ export const load: PageServerLoad = async ({ cookies }) => {
 					eq(storeSales.shiftId, currentShift.id),
 					isNull(storeSales.deletedAt)
 				));
-
-			activeTourBookings = await db
-				.select({
-					id: tourBookings.id,
-					shiftId: tourBookings.shiftId,
-					tourProductId: tourBookings.tourProductId,
-					guideId: tourBookings.guideId,
-					pax: tourBookings.pax,
-					unitPrice: tourBookings.unitPrice,
-					totalPrice: tourBookings.totalPrice,
-					cost: tourBookings.cost,
-					bookedAt: tourBookings.bookedAt,
-					activityDate: tourBookings.activityDate,
-					status: tourBookings.status,
-					createdAt: tourBookings.createdAt,
-					productName: tourAgencyProducts.name
-				})
-				.from(tourBookings)
-				.leftJoin(tourAgencyProducts, eq(tourBookings.tourProductId, tourAgencyProducts.id))
-				.where(eq(tourBookings.status, 'active'));
 		}
 	}
 

@@ -181,10 +181,8 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 		// Validate no overlap with other reservations
 		const finalItems = (items !== undefined ? items : reservation.items) as ReservationItem[];
-		const finalFrom = updates.reservedFrom as Date ?? new Date(reservation.reservedFrom);
-		const finalUntil = updates.reservedUntil as Date ?? new Date(reservation.reservedUntil);
 
-		const conflict = await validateNoOverlap(finalItems, finalFrom, finalUntil, id);
+		const conflict = await validateNoOverlap(finalItems, new Date(finalFrom as string | Date), new Date(finalUntil as string | Date), id);
 		if (conflict) {
 			return json(conflict, { status: 409 });
 		}

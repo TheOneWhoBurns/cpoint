@@ -9,16 +9,58 @@ const SCOPES = [
 	'https://www.googleapis.com/auth/drive.file'
 ];
 
-export function getOAuth2Client() {
+interface GoogleOAuthCredentials {
+	clientId: string;
+	clientSecret: string;
+	origin: string;
+}
+
+/**
+ * Reads Google OAuth credentials from DB first, then falls back to env vars.
+ */
+export async function getGoogleCredentials(): Promise<GoogleOAuthCredentials | null> {
+	const [setting] = await db
+		.select()
+		.from(appSettings)
+		.where(eq(appSettings.key, 'google_oauth_credentials'));
+
+	if (setting?.value) {
+		const creds = setting.value as GoogleOAuthCredentials;
+		if (creds.clientId && creds.clientSecret) {
+			return {
+				clientId: creds.clientId,
+				clientSecret: creds.clientSecret,
+				origin: creds.origin || env.ORIGIN || ''
+			};
+		}
+	}
+
+	// Fallback to environment variables
+	if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
+		return {
+			clientId: env.GOOGLE_CLIENT_ID,
+			clientSecret: env.GOOGLE_CLIENT_SECRET,
+			origin: env.ORIGIN || ''
+		};
+	}
+
+	return null;
+}
+
+export async function getOAuth2Client() {
+	const creds = await getGoogleCredentials();
+	if (!creds) {
+		throw new Error('Google OAuth credentials not configured.');
+	}
 	return new google.auth.OAuth2(
-		env.GOOGLE_CLIENT_ID,
-		env.GOOGLE_CLIENT_SECRET,
-		`${env.ORIGIN}/api/google/callback`
+		creds.clientId,
+		creds.clientSecret,
+		`${creds.origin}/api/google/callback`
 	);
 }
 
-export function getAuthUrl(state: string): string {
-	const client = getOAuth2Client();
+export async function getAuthUrl(state: string): Promise<string> {
+	const client = await getOAuth2Client();
 	return client.generateAuthUrl({
 		access_type: 'offline',
 		scope: SCOPES,
@@ -28,7 +70,7 @@ export function getAuthUrl(state: string): string {
 }
 
 export async function handleCallback(code: string) {
-	const client = getOAuth2Client();
+	const client = await getOAuth2Client();
 	const { tokens } = await client.getToken(code);
 
 	await db
@@ -91,7 +133,8 @@ async function getAuthenticatedClient() {
 }
 
 export async function isGoogleConnected(): Promise<boolean> {
-	if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+	const creds = await getGoogleCredentials();
+	if (!creds) {
 		return false;
 	}
 	const [setting] = await db
@@ -99,6 +142,11 @@ export async function isGoogleConnected(): Promise<boolean> {
 		.from(appSettings)
 		.where(eq(appSettings.key, 'google_tokens'));
 	return !!setting?.value;
+}
+
+export function clearOAuthCache() {
+	cachedClient = null;
+	cachedAt = 0;
 }
 
 export async function disconnectGoogle() {

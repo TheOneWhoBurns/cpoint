@@ -57,55 +57,50 @@ export const POST: RequestHandler = async ({ cookies }) => {
 
 	const operatorId = parseInt(operatorIdStr);
 
-	const [operator] = await db
-		.select()
-		.from(operators)
-		.where(eq(operators.id, operatorId));
+	// Fetch operator and active shift in parallel
+	const [operatorResult, shiftResult] = await Promise.all([
+		db.select().from(operators).where(eq(operators.id, operatorId)),
+		db.select().from(shifts).where(and(eq(shifts.operatorId, operatorId), isNull(shifts.endedAt)))
+	]);
 
-	const [shift] = await db
-		.select()
-		.from(shifts)
-		.where(and(eq(shifts.operatorId, operatorId), isNull(shifts.endedAt)));
+	const [operator] = operatorResult;
+	const [shift] = shiftResult;
 
 	if (!shift) {
 		return new Response(JSON.stringify({ error: 'No active shift' }), { status: 404 });
 	}
 
-	const shiftRentals = await db
-		.select()
-		.from(rentals)
-		.where(eq(rentals.shiftId, shift.id));
-
-	const shiftSales = await db
-		.select({
-			id: storeSales.id,
-			quantity: storeSales.quantity,
-			unitPrice: storeSales.unitPrice,
-			total: storeSales.total,
-			createdAt: storeSales.createdAt,
-			deletedAt: storeSales.deletedAt,
-			productName: storeProducts.name
-		})
-		.from(storeSales)
-		.leftJoin(storeProducts, eq(storeSales.productId, storeProducts.id))
-		.where(eq(storeSales.shiftId, shift.id));
-
-	const shiftTourBookings = await db
-		.select({
-			id: tourBookings.id,
-			pax: tourBookings.pax,
-			unitPrice: tourBookings.unitPrice,
-			totalPrice: tourBookings.totalPrice,
-			cost: tourBookings.cost,
-			bookedAt: tourBookings.bookedAt,
-			activityDate: tourBookings.activityDate,
-			status: tourBookings.status,
-			createdAt: tourBookings.createdAt,
-			productName: tourAgencyProducts.name
-		})
-		.from(tourBookings)
-		.leftJoin(tourAgencyProducts, eq(tourBookings.tourProductId, tourAgencyProducts.id))
-		.where(eq(tourBookings.shiftId, shift.id));
+	// Fetch all shift data in parallel
+	const [shiftRentals, shiftSales, shiftTourBookings] = await Promise.all([
+		db.select().from(rentals).where(eq(rentals.shiftId, shift.id)),
+		db.select({
+				id: storeSales.id,
+				quantity: storeSales.quantity,
+				unitPrice: storeSales.unitPrice,
+				total: storeSales.total,
+				createdAt: storeSales.createdAt,
+				deletedAt: storeSales.deletedAt,
+				productName: storeProducts.name
+			})
+			.from(storeSales)
+			.leftJoin(storeProducts, eq(storeSales.productId, storeProducts.id))
+			.where(eq(storeSales.shiftId, shift.id)),
+		db.select({
+				id: tourBookings.id,
+				pax: tourBookings.pax,
+				unitPrice: tourBookings.unitPrice,
+				totalPrice: tourBookings.totalPrice,
+				cost: tourBookings.cost,
+				bookedAt: tourBookings.bookedAt,
+				activityDate: tourBookings.activityDate,
+				status: tourBookings.status,
+				createdAt: tourBookings.createdAt,
+				productName: tourAgencyProducts.name
+			})
+			.from(tourBookings)
+			.leftJoin(tourAgencyProducts, eq(tourBookings.tourProductId, tourAgencyProducts.id))
+			.where(eq(tourBookings.shiftId, shift.id))
+	]);
 
 	const activeRentals = shiftRentals.filter(r => r.status !== 'deleted');
 	const activeSales = shiftSales.filter(s => !s.deletedAt);
