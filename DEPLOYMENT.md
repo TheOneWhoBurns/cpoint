@@ -2,7 +2,9 @@
 
 ## Overview
 
-This project uses GitHub Actions for continuous integration and deploys to an EC2 instance running a systemd service.
+This project uses GitHub Actions for continuous integration and deploys to an **AWS EC2 instance** running a systemd service. The EC2 instance is a standard Linux server — there is no container orchestration, managed platform, or secrets manager in use.
+
+**Important**: Environment variables and secrets are **not** injected by CI/CD or any secrets manager. They must be manually configured on the EC2 server (see [Environment Variables](#environment-variables--secrets-ec2) below).
 
 **Future**: Blue-green deployment infrastructure exists in the repo (`docker-compose.prod.yml`, `nginx.conf`) but is not yet in use. Production currently runs as a single Node.js process via systemd.
 
@@ -46,9 +48,26 @@ Set these in GitHub repo settings → Secrets and variables → Actions:
 
 1. Install Node.js 20
 2. Clone repo to `/opt/rental-system`
-3. Configure `.env.production` with `DATABASE_URL` and any other env vars
+3. Configure `.env.production` (see below)
 4. Set up `rental-app` systemd service pointing to the SvelteKit build output
 5. Ensure PostgreSQL is running and accessible
+
+### Environment Variables / Secrets (EC2)
+
+The production server loads environment variables from `/opt/rental-system/.env.production`. **There is no automated secret syncing** — when a new env variable is introduced in the codebase, it must be manually added on the server.
+
+Current required variables:
+- `DATABASE_URL` — PostgreSQL connection string
+
+To add or update a secret:
+
+```bash
+ssh <DEPLOY_USER>@<DEPLOY_HOST>
+sudo nano /opt/rental-system/.env.production   # add/edit the variable
+sudo systemctl restart rental-app              # restart to pick up changes
+```
+
+**If you add a new env variable to the code, document it here and remember to export it on the EC2 server.**
 
 #### Health Check
 
