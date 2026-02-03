@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators, adminSessions } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, lt } from 'drizzle-orm';
 import { verifyPasscode, generateSessionToken, checkRateLimit, clearRateLimit } from '$lib/server/auth';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
@@ -52,6 +52,9 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 
 	const token = generateSessionToken();
 	const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000);
+
+	// Clean up expired sessions on login to prevent unbounded table growth
+	await db.delete(adminSessions).where(lt(adminSessions.expiresAt, new Date()));
 
 	await db.insert(adminSessions).values({
 		token,
