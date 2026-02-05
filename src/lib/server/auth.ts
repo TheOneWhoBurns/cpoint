@@ -29,7 +29,8 @@ export async function verifyPasscode(passcode: string, stored: string): Promise<
 }
 
 export function logAuthFailure(endpoint: string, identifier: string, ip: string): void {
-	logger.warn({ endpoint, identifier, ip }, 'auth_failure');
+	const maskedIp = ip.includes('.') ? ip.replace(/\.\d+$/, '.***') : ip.replace(/:[^:]+$/, ':***');
+	logger.warn({ endpoint, identifier, ip: maskedIp }, 'auth_failure');
 }
 
 export function generateSessionToken(): string {
