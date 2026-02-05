@@ -58,6 +58,7 @@
 		{ id: 'active', label: 'Active', icon: 'schedule', count: data.rentals.length, alwaysShow: true },
 		{ id: 'reservations', label: 'Reservations', icon: 'event', count: data.reservations.length, alwaysShow: false },
 		{ id: 'tours', label: 'Tours', icon: 'tour', count: data.tourBookings.length, alwaysShow: false },
+		{ id: 'tourinfo', label: 'Tour Info', icon: 'info', count: data.tourProducts.length, alwaysShow: false },
 		{ id: 'history', label: 'History', icon: 'history', count: data.previousShiftRentals.length, alwaysShow: true }
 	]);
 
@@ -460,6 +461,46 @@
 							{/each}
 						</div>
 					{/if}
+				{:else if activeTab === 'tourinfo'}
+					{#if data.tourProducts.length === 0}
+						<div class="empty-state">
+							<span class="material-symbols-rounded empty-icon">info</span>
+							<p class="md-title-medium">No tours available</p>
+							<p class="md-body-medium">Add tours in the admin panel</p>
+						</div>
+					{:else}
+						<div class="cards-grid tour-info-grid">
+							{#each data.tourProducts as tour (tour.id)}
+								<div class="tour-info-card">
+									<div class="tour-info-header">
+										<span class="material-symbols-rounded tour-icon">tour</span>
+										<h3 class="md-title-medium">{tour.name}</h3>
+										<span class="tour-price">${(tour.price / 100).toFixed(2)}/person</span>
+									</div>
+									{#if tour.info}
+										<p class="tour-description md-body-medium">{tour.info}</p>
+									{/if}
+									{#if tour.multimediaLinks && tour.multimediaLinks.length > 0}
+										<div class="tour-media-links">
+											{#each tour.multimediaLinks as link}
+												<a href={link} target="_blank" rel="noopener noreferrer" class="media-link-btn">
+													<span class="material-symbols-rounded">{link.includes('instagram') ? 'photo_camera' : 'link'}</span>
+													<span>{link.includes('instagram') ? 'View on Instagram' : 'Open Link'}</span>
+													<span class="material-symbols-rounded">open_in_new</span>
+												</a>
+											{/each}
+										</div>
+									{/if}
+									{#if tour.requiresGuide}
+										<div class="tour-badge">
+											<span class="material-symbols-rounded">hiking</span>
+											Guide Required
+										</div>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
 				{:else if activeTab === 'history'}
 					{#if data.previousShiftRentals.length === 0}
 						<div class="empty-state compact">
@@ -693,6 +734,109 @@
 	@keyframes scale-in {
 		from { opacity: 0; transform: scale(0.95); }
 		to { opacity: 1; transform: scale(1); }
+	}
+
+	/* Tour Info Cards */
+	.tour-info-grid {
+		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+	}
+
+	.tour-info-card {
+		background: var(--md-sys-color-surface);
+		border-radius: var(--md-sys-shape-corner-large);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		padding: var(--md-sys-spacing-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.tour-info-header {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		flex-wrap: wrap;
+	}
+
+	.tour-icon {
+		font-size: 28px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.tour-info-header h3 {
+		flex: 1;
+		margin: 0;
+		color: var(--md-sys-color-on-surface);
+	}
+
+	.tour-price {
+		font: var(--md-sys-typescale-title-medium);
+		color: var(--md-sys-color-primary);
+		background: var(--md-sys-color-primary-container);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		border-radius: var(--md-sys-shape-corner-small);
+	}
+
+	.tour-description {
+		color: var(--md-sys-color-on-surface-variant);
+		margin: 0;
+		white-space: pre-wrap;
+		line-height: 1.5;
+	}
+
+	.tour-media-links {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.media-link-btn {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-sm) var(--md-sys-spacing-md);
+		background: var(--md-sys-color-secondary-container);
+		color: var(--md-sys-color-on-secondary-container);
+		border-radius: var(--md-sys-shape-corner-medium);
+		text-decoration: none;
+		font: var(--md-sys-typescale-label-large);
+		transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.media-link-btn:hover {
+		background: var(--md-sys-color-secondary);
+		color: var(--md-sys-color-on-secondary);
+		transform: translateY(-2px);
+		box-shadow: var(--md-sys-elevation-level2);
+	}
+
+	.media-link-btn .material-symbols-rounded:first-child {
+		font-size: 24px;
+	}
+
+	.media-link-btn span:nth-child(2) {
+		flex: 1;
+	}
+
+	.media-link-btn .material-symbols-rounded:last-child {
+		font-size: 18px;
+		opacity: 0.7;
+	}
+
+	.tour-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		background: var(--md-sys-color-tertiary-container);
+		color: var(--md-sys-color-on-tertiary-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		font: var(--md-sys-typescale-label-medium);
+		width: fit-content;
+	}
+
+	.tour-badge .material-symbols-rounded {
+		font-size: 18px;
 	}
 
 	@media (max-width: 768px) {
