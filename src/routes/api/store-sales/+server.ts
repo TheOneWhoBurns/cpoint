@@ -121,3 +121,51 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 	return json(sales);
 };
+
+export const DELETE: RequestHandler = async ({ request }) => {
+	const { id, passcode } = await request.json();
+
+	if (!id) {
+		return json({ error: 'Sale ID required' }, { status: 400 });
+	}
+
+	if (!passcode) {
+		return json({ error: 'Passcode required' }, { status: 400 });
+	}
+
+	const [operator] = await db
+		.select()
+		.from(operators)
+		.where(eq(operators.passcode, passcode));
+
+	if (!operator) {
+		return json({ error: 'Invalid passcode' }, { status: 403 });
+	}
+
+	const [sale] = await db.select().from(storeSales).where(eq(storeSales.id, id));
+	if (!sale) {
+		return json({ error: 'Sale not found' }, { status: 404 });
+	}
+
+	if (sale.deletedAt) {
+		return json({ error: 'Sale already deleted' }, { status: 400 });
+	}
+
+	// Restore stock
+	const [product] = await db.select().from(storeProducts).where(eq(storeProducts.id, sale.productId!));
+	if (product) {
+		await db
+			.update(storeProducts)
+			.set({ quantity: (product.quantity ?? 0) + sale.quantity })
+			.where(eq(storeProducts.id, sale.productId!));
+	}
+
+	// Soft delete
+	const [updated] = await db
+		.update(storeSales)
+		.set({ deletedAt: new Date() })
+		.where(eq(storeSales.id, id))
+		.returning();
+
+	return json(updated);
+};

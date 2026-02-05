@@ -386,7 +386,13 @@
 			padding: var(--md-sys-spacing-xs) 0;
 			padding-bottom: max(var(--md-sys-spacing-xs), env(safe-area-inset-bottom));
 			z-index: 100;
-			justify-content: space-around;
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: none;
+		}
+
+		.admin-bottomnav::-webkit-scrollbar {
+			display: none;
 		}
 
 		.bottomnav-item {
@@ -399,6 +405,7 @@
 			text-decoration: none;
 			border-radius: var(--md-sys-shape-corner-medium);
 			min-width: 56px;
+			flex-shrink: 0;
 			transition: all var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 		}
 
