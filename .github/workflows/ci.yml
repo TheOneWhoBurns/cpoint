@@ -41,6 +41,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://rental:testpass@localhost:5432/rental_manager_test
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build
         run: npm run build
         env:

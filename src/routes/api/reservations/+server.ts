@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { reservations, rentals } from '$lib/server/db/schema';
-import { eq, and, or, lte, gte } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { findReservationTimeConflicts } from '$lib/server/business/reservations';
 import type { RequestHandler } from './$types';
 
 interface ReservationItem {
@@ -40,7 +41,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'End time must be after start time' }, { status: 400 });
 	}
 
-	// Check for overlapping active reservations on the same tracked items
 	const existingReservations = await db
 		.select()
 		.from(reservations)
@@ -50,27 +50,26 @@ export const POST: RequestHandler = async ({ request }) => {
 		.filter(i => i.type === 'tracked' && i.itemId)
 		.map(i => i.itemId!);
 
-	for (const existing of existingReservations) {
-		const existingItems = existing.items as ReservationItem[];
-		const existingFrom = new Date(existing.reservedFrom);
-		const existingUntil = new Date(existing.reservedUntil);
+	const conflict = findReservationTimeConflicts({
+		requestedFrom: from,
+		requestedUntil: until,
+		requestedTrackedIds,
+		existingReservations: existingReservations.map(r => ({
+			id: r.id,
+			items: r.items as ReservationItem[],
+			customer: r.customer as { name?: string } | null,
+			reason: r.reason,
+			reservedFrom: r.reservedFrom,
+			reservedUntil: r.reservedUntil
+		}))
+	});
 
-		// Check time overlap
-		if (from < existingUntil && until > existingFrom) {
-			// Check item overlap
-			const existingTrackedIds = existingItems
-				.filter(i => i.type === 'tracked' && i.itemId)
-				.map(i => i.itemId!);
-
-			const overlap = requestedTrackedIds.filter(id => existingTrackedIds.includes(id));
-			if (overlap.length > 0) {
-				const existingCustomer = existing.customer as { name?: string } | null;
-				return json({
-					error: `Equipment conflict with existing reservation: ${existingCustomer?.name || existing.reason || `#${existing.id}`}`,
-					conflictingReservation: existing
-				}, { status: 409 });
-			}
-		}
+	if (conflict) {
+		const existingCustomer = conflict.conflicting.customer;
+		return json({
+			error: `Equipment conflict with existing reservation: ${existingCustomer?.name || conflict.conflicting.reason || `#${conflict.conflicting.id}`}`,
+			conflictingReservation: conflict.conflicting
+		}, { status: 409 });
 	}
 
 	const [created] = await db

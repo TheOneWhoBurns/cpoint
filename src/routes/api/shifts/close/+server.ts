@@ -1,6 +1,7 @@
 import { db } from '$lib/server/db';
 import { shifts, rentals, operators, storeSales, storeProducts, tourBookings, tourAgencyProducts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 import * as XLSX from 'xlsx';
 import { isGoogleConnected, createSpreadsheet } from '$lib/server/google-sheets';
@@ -316,7 +317,7 @@ export const POST: RequestHandler = async ({ cookies }) => {
 				headers: { 'Content-Type': 'application/json' }
 			});
 		} catch (e) {
-			console.error('Google Sheets export failed, falling back to Excel:', e);
+			logger.error({ err: e }, 'Google Sheets export failed, falling back to Excel');
 			// Fall through to Excel export
 		}
 	}

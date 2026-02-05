@@ -13,7 +13,9 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.56.0",
@@ -26,7 +28,8 @@
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
 		"typescript": "^5.9.3",
-		"vite": "^7.2.6"
+		"vite": "^7.2.6",
+		"vitest": "^4.0.18"
 	},
 	"dependencies": {
 		"@material/web": "^2.4.1",
@@ -37,6 +40,7 @@
 		"flatpickr": "^4.6.13",
 		"googleapis": "^171.1.0",
 		"material-symbols": "^0.27.0",
+		"pino": "^10.3.0",
 		"postgres": "^3.4.7",
 		"xlsx": "^0.18.5"
 	}
