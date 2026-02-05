@@ -4,8 +4,8 @@ declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
-			/** '' on admin subdomain, '/admin' on main domain */
 			adminBase: string;
+			requestId: string;
 		}
 		// interface PageData {}
 		// interface PageState {}

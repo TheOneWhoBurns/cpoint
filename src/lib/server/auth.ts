@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { logger } from '$lib/server/logger';
 
 const SALT_ROUNDS = 10;
 const SCRYPT_KEYLEN = 32;
@@ -23,12 +24,13 @@ export async function verifyPasscode(passcode: string, stored: string): Promise<
 		return bcrypt.compare(passcode, stored);
 	}
 	// Reject plaintext-stored passcodes — they must be rehashed
-	console.warn('[SECURITY] Rejected login attempt against unhashed passcode. Passcode must be rehashed.');
+	logger.warn('Rejected login attempt against unhashed passcode');
 	return false;
 }
 
 export function logAuthFailure(endpoint: string, identifier: string, ip: string): void {
-	console.warn(`[AUTH_FAILURE] endpoint=${endpoint} identifier=${identifier} ip=${ip} time=${new Date().toISOString()}`);
+	const maskedIp = ip.includes('.') ? ip.replace(/\.\d+$/, '.***') : ip.replace(/:[^:]+$/, ':***');
+	logger.warn({ endpoint, identifier, ip: maskedIp }, 'auth_failure');
 }
 
 export function generateSessionToken(): string {

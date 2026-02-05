@@ -13,11 +13,44 @@
 	let productName = $state('');
 	let productPrice = $state('');
 	let requiresGuide = $state(false);
+	let productInfo = $state('');
+	let newLink = $state('');
+	let multimediaLinks = $state<string[]>([]);
 	let loading = $state(false);
 	let error = $state('');
 
+	let editingProduct = $state<any>(null);
+	let editName = $state('');
+	let editPrice = $state('');
+	let editRequiresGuide = $state(false);
+	let editInfo = $state('');
+	let editNewLink = $state('');
+	let editMultimediaLinks = $state<string[]>([]);
+
 	let confirmDeleteProduct = $state(false);
 	let pendingDeleteProductId = $state<number | null>(null);
+
+	function addLink() {
+		if (newLink.trim() && !multimediaLinks.includes(newLink.trim())) {
+			multimediaLinks = [...multimediaLinks, newLink.trim()];
+			newLink = '';
+		}
+	}
+
+	function removeLink(link: string) {
+		multimediaLinks = multimediaLinks.filter(l => l !== link);
+	}
+
+	function addEditLink() {
+		if (editNewLink.trim() && !editMultimediaLinks.includes(editNewLink.trim())) {
+			editMultimediaLinks = [...editMultimediaLinks, editNewLink.trim()];
+			editNewLink = '';
+		}
+	}
+
+	function removeEditLink(link: string) {
+		editMultimediaLinks = editMultimediaLinks.filter(l => l !== link);
+	}
 
 	async function createProduct() {
 		if (!productName.trim()) {
@@ -40,7 +73,9 @@
 			body: JSON.stringify({
 				name: productName,
 				requiresGuide,
-				price
+				price,
+				info: productInfo || null,
+				multimediaLinks: multimediaLinks.length > 0 ? multimediaLinks : null
 			})
 		});
 
@@ -48,10 +83,55 @@
 			productName = '';
 			productPrice = '';
 			requiresGuide = false;
+			productInfo = '';
+			newLink = '';
+			multimediaLinks = [];
 			await invalidateAll();
 		} else {
 			const d = await res.json();
 			error = d.error || 'Failed to create product';
+		}
+		loading = false;
+	}
+
+	function startEdit(product: any) {
+		editingProduct = product;
+		editName = product.name;
+		editPrice = (product.price / 100).toFixed(2);
+		editRequiresGuide = product.requiresGuide ?? false;
+		editInfo = product.info || '';
+		editMultimediaLinks = product.multimediaLinks ? [...product.multimediaLinks] : [];
+		editNewLink = '';
+	}
+
+	function cancelEdit() {
+		editingProduct = null;
+	}
+
+	async function saveEdit() {
+		if (!editingProduct) return;
+		loading = true;
+		error = '';
+
+		const res = await fetch('/api/tour-agency', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				id: editingProduct.id,
+				name: editName,
+				requiresGuide: editRequiresGuide,
+				price: parseFloat(editPrice) || 0,
+				info: editInfo || null,
+				multimediaLinks: editMultimediaLinks.length > 0 ? editMultimediaLinks : null
+			})
+		});
+
+		if (res.ok) {
+			editingProduct = null;
+			await invalidateAll();
+		} else {
+			const d = await res.json();
+			error = d.error || 'Failed to update';
 		}
 		loading = false;
 	}
@@ -136,6 +216,53 @@
 				</md-outlined-text-field>
 			</div>
 
+			<md-outlined-text-field
+				label="Tour Info / Description"
+				type="textarea"
+				rows="3"
+				placeholder="Enter tour details, what's included, etc."
+				value={productInfo}
+				oninput={(e: Event) => productInfo = (e.target as HTMLInputElement).value}
+				disabled={loading}
+				style="width: 100%;"
+			>
+				<span class="material-symbols-rounded" slot="leading-icon">info</span>
+			</md-outlined-text-field>
+
+			<div class="links-section">
+				<span class="md-label-medium links-label">Multimedia Links (Instagram, etc.)</span>
+				<div class="link-input-row">
+					<md-outlined-text-field
+						label="Add URL"
+						placeholder="https://instagram.com/..."
+						value={newLink}
+						oninput={(e: Event) => newLink = (e.target as HTMLInputElement).value}
+						onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
+						disabled={loading}
+						style="flex: 1;"
+					>
+						<span class="material-symbols-rounded" slot="leading-icon">link</span>
+					</md-outlined-text-field>
+					<md-filled-button onclick={addLink} disabled={loading || !newLink.trim()}>
+						<span class="material-symbols-rounded" slot="icon">add</span>
+						Add
+					</md-filled-button>
+				</div>
+				{#if multimediaLinks.length > 0}
+					<div class="links-list">
+						{#each multimediaLinks as link}
+							<div class="link-chip">
+								<span class="material-symbols-rounded">link</span>
+								<span class="link-text">{link}</span>
+								<md-icon-button onclick={() => removeLink(link)} disabled={loading}>
+									<span class="material-symbols-rounded">close</span>
+								</md-icon-button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
 			<label class="guide-checkbox">
 				<md-checkbox
 					checked={requiresGuide}
@@ -177,62 +304,143 @@
 				<p class="md-body-small">Add your first tour product above</p>
 			</div>
 		{:else}
-			<div class="table-container">
-				<table class="data-table">
-					<thead>
-						<tr>
-							<th>Tour</th>
-							<th>Price/Person</th>
-							<th>Guide</th>
-							<th>Status</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.tourProducts as product}
-							<tr class:inactive={!product.isActive}>
-								<td>
-									<div class="product-cell">
-										<span class="material-symbols-rounded product-icon">tour</span>
-										<span class="md-body-medium product-name">{product.name}</span>
-									</div>
-								</td>
-								<td>
-									<span class="price-value">${(product.price / 100).toFixed(2)}</span>
-								</td>
-								<td>
-									{#if product.requiresGuide}
-										<span class="guide-badge">
-											<span class="material-symbols-rounded icon-sm">hiking</span>
-											Yes
-										</span>
-									{:else}
-										<span class="md-body-small no-guide">No</span>
-									{/if}
-								</td>
-								<td>
-									<label class="switch-label">
-										<md-switch
-											selected={product.isActive}
-											onchange={() => toggleActive(product.id, product.isActive)}
-											disabled={loading}
-											aria-label="Toggle product status"
-										></md-switch>
-									</label>
-								</td>
-								<td>
-									<md-icon-button
-										onclick={() => promptDeleteProduct(product.id)}
+			<div class="products-list">
+				{#each data.tourProducts as product}
+					<div class="product-card" class:inactive={!product.isActive}>
+						{#if editingProduct?.id === product.id}
+							<div class="edit-form">
+								<div class="form-grid">
+									<md-outlined-text-field
+										label="Tour Name"
+										value={editName}
+										oninput={(e: Event) => editName = (e.target as HTMLInputElement).value}
 										disabled={loading}
-										aria-label="Delete product"
 									>
-										<span class="material-symbols-rounded delete-icon">delete</span>
-									</md-icon-button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+										<span class="material-symbols-rounded" slot="leading-icon">label</span>
+									</md-outlined-text-field>
+									<md-outlined-text-field
+										label="Price per Person"
+										type="number"
+										step="0.01"
+										min="0"
+										value={editPrice}
+										oninput={(e: Event) => editPrice = (e.target as HTMLInputElement).value}
+										disabled={loading}
+										prefix-text="$"
+									>
+										<span class="material-symbols-rounded" slot="leading-icon">payments</span>
+									</md-outlined-text-field>
+								</div>
+								<md-outlined-text-field
+									label="Tour Info / Description"
+									type="textarea"
+									rows="3"
+									value={editInfo}
+									oninput={(e: Event) => editInfo = (e.target as HTMLInputElement).value}
+									disabled={loading}
+									style="width: 100%;"
+								>
+									<span class="material-symbols-rounded" slot="leading-icon">info</span>
+								</md-outlined-text-field>
+								<div class="links-section">
+									<span class="md-label-medium links-label">Multimedia Links</span>
+									<div class="link-input-row">
+										<md-outlined-text-field
+											label="Add URL"
+											placeholder="https://instagram.com/..."
+											value={editNewLink}
+											oninput={(e: Event) => editNewLink = (e.target as HTMLInputElement).value}
+											onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); addEditLink(); } }}
+											disabled={loading}
+											style="flex: 1;"
+										>
+											<span class="material-symbols-rounded" slot="leading-icon">link</span>
+										</md-outlined-text-field>
+										<md-filled-button onclick={addEditLink} disabled={loading || !editNewLink.trim()}>
+											<span class="material-symbols-rounded" slot="icon">add</span>
+											Add
+										</md-filled-button>
+									</div>
+									{#if editMultimediaLinks.length > 0}
+										<div class="links-list">
+											{#each editMultimediaLinks as link}
+												<div class="link-chip">
+													<span class="material-symbols-rounded">link</span>
+													<span class="link-text">{link}</span>
+													<md-icon-button onclick={() => removeEditLink(link)} disabled={loading}>
+														<span class="material-symbols-rounded">close</span>
+													</md-icon-button>
+												</div>
+											{/each}
+										</div>
+									{/if}
+								</div>
+								<label class="guide-checkbox">
+									<md-checkbox
+										checked={editRequiresGuide}
+										onchange={(e: Event) => editRequiresGuide = (e.target as HTMLInputElement).checked}
+										disabled={loading}
+									></md-checkbox>
+									<span class="material-symbols-rounded">hiking</span>
+									<span class="md-body-medium">Requires Guide</span>
+								</label>
+								<div class="edit-actions">
+									<md-outlined-button onclick={cancelEdit} disabled={loading}>Cancel</md-outlined-button>
+									<md-filled-button onclick={saveEdit} disabled={loading || !editName.trim()}>
+										<span class="material-symbols-rounded" slot="icon">save</span>
+										Save
+									</md-filled-button>
+								</div>
+							</div>
+						{:else}
+							<div class="product-header">
+								<div class="product-cell">
+									<span class="material-symbols-rounded product-icon">tour</span>
+									<span class="md-title-medium product-name">{product.name}</span>
+								</div>
+								<span class="price-value">${(product.price / 100).toFixed(2)}/person</span>
+							</div>
+							{#if product.info}
+								<p class="product-info md-body-medium">{product.info}</p>
+							{/if}
+							{#if product.multimediaLinks && product.multimediaLinks.length > 0}
+								<div class="product-links">
+									{#each product.multimediaLinks as link}
+										<a href={link} target="_blank" rel="noopener noreferrer" class="media-link">
+											<span class="material-symbols-rounded">{link.includes('instagram') ? 'photo_camera' : 'link'}</span>
+											<span>{link.includes('instagram') ? 'Instagram' : 'Link'}</span>
+										</a>
+									{/each}
+								</div>
+							{/if}
+							<div class="product-meta">
+								{#if product.requiresGuide}
+									<span class="guide-badge">
+										<span class="material-symbols-rounded icon-sm">hiking</span>
+										Guide Required
+									</span>
+								{/if}
+								<label class="switch-label">
+									<md-switch
+										selected={product.isActive}
+										onchange={() => toggleActive(product.id, product.isActive)}
+										disabled={loading}
+										aria-label="Toggle product status"
+									></md-switch>
+									<span class="md-body-small">{product.isActive ? 'Active' : 'Inactive'}</span>
+								</label>
+							</div>
+							<div class="product-actions">
+								<md-icon-button onclick={() => startEdit(product)} disabled={loading} aria-label="Edit product">
+									<span class="material-symbols-rounded">edit</span>
+								</md-icon-button>
+								<md-icon-button onclick={() => promptDeleteProduct(product.id)} disabled={loading} aria-label="Delete product">
+									<span class="material-symbols-rounded delete-icon">delete</span>
+								</md-icon-button>
+							</div>
+						{/if}
+					</div>
+				{/each}
 			</div>
 		{/if}
 	</section>
@@ -329,6 +537,53 @@
 		margin-top: var(--md-sys-spacing-sm);
 	}
 
+	/* Links Section */
+	.links-section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.links-label {
+		color: var(--md-sys-color-on-surface-variant);
+	}
+
+	.link-input-row {
+		display: flex;
+		gap: var(--md-sys-spacing-sm);
+		align-items: flex-end;
+	}
+
+	.links-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.link-chip {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		background: var(--md-sys-color-surface-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		border: 1px solid var(--md-sys-color-outline-variant);
+	}
+
+	.link-chip .material-symbols-rounded {
+		font-size: 18px;
+		color: var(--md-sys-color-primary);
+	}
+
+	.link-text {
+		font: var(--md-sys-typescale-body-small);
+		color: var(--md-sys-color-on-surface);
+		max-width: 200px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	/* Error Message */
 	.error-message {
 		display: flex;
@@ -344,39 +599,33 @@
 		font-size: 20px;
 	}
 
-	/* Table Styles */
-	.table-container {
-		overflow-x: auto;
-	}
-
-	.data-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.data-table th,
-	.data-table td {
+	/* Products List */
+	.products-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
 		padding: var(--md-sys-spacing-md);
-		text-align: left;
-		border-bottom: 1px solid var(--md-sys-color-outline-variant);
 	}
 
-	.data-table th {
-		font: var(--md-sys-typescale-label-large);
-		color: var(--md-sys-color-on-surface-variant);
+	.product-card {
 		background: var(--md-sys-color-surface-container-low);
+		border-radius: var(--md-sys-shape-corner-medium);
+		border: 1px solid var(--md-sys-color-outline-variant);
+		padding: var(--md-sys-spacing-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-sm);
+		position: relative;
 	}
 
-	.data-table tbody tr {
-		transition: background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
-	}
-
-	.data-table tbody tr:hover {
-		background: var(--md-sys-color-surface-container);
-	}
-
-	.data-table tbody tr.inactive {
+	.product-card.inactive {
 		opacity: 0.6;
+	}
+
+	.product-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 	}
 
 	/* Product Cell */
@@ -387,13 +636,62 @@
 	}
 
 	.product-icon {
-		font-size: 20px;
+		font-size: 24px;
 		color: var(--md-sys-color-primary);
 	}
 
 	.product-name {
 		font-weight: 500;
 		color: var(--md-sys-color-on-surface);
+	}
+
+	.product-info {
+		color: var(--md-sys-color-on-surface-variant);
+		margin: 0;
+		white-space: pre-wrap;
+	}
+
+	.product-links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--md-sys-spacing-sm);
+	}
+
+	.media-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-xs);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		background: var(--md-sys-color-primary-container);
+		color: var(--md-sys-color-on-primary-container);
+		border-radius: var(--md-sys-shape-corner-small);
+		text-decoration: none;
+		font: var(--md-sys-typescale-label-medium);
+		transition: background var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+	}
+
+	.media-link:hover {
+		background: var(--md-sys-color-primary);
+		color: var(--md-sys-color-on-primary);
+	}
+
+	.media-link .material-symbols-rounded {
+		font-size: 18px;
+	}
+
+	.product-meta {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-md);
+		flex-wrap: wrap;
+	}
+
+	.product-actions {
+		position: absolute;
+		top: var(--md-sys-spacing-sm);
+		right: var(--md-sys-spacing-sm);
+		display: flex;
+		gap: var(--md-sys-spacing-xs);
 	}
 
 	/* Price Value */
@@ -418,13 +716,28 @@
 		font-size: 18px;
 	}
 
-	.no-guide {
-		color: var(--md-sys-color-on-surface-variant);
+	.switch-label {
+		display: flex;
+		align-items: center;
+		gap: var(--md-sys-spacing-sm);
 	}
 
 	/* Delete Icon */
 	.delete-icon {
 		color: var(--md-sys-color-error);
+	}
+
+	/* Edit Form */
+	.edit-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--md-sys-spacing-md);
+	}
+
+	.edit-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--md-sys-spacing-sm);
 	}
 
 	/* Empty State */

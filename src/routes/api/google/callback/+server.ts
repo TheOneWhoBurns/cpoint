@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { handleCallback } from '$lib/server/google-sheets';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
@@ -27,7 +28,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	try {
 		await handleCallback(code);
 	} catch (e) {
-		console.error('Google OAuth callback error:', e);
+		logger.error({ err: e }, 'Google OAuth callback error');
 		redirect(302, '/admin/settings?error=auth_failed');
 	}
 

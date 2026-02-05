@@ -1,7 +1,8 @@
 import { db } from '$lib/server/db';
 import { operators, adminSessions } from '$lib/server/db/schema';
 import { eq, and, gt } from 'drizzle-orm';
-import type { Handle } from '@sveltejs/kit';
+import { createRequestLogger, logger } from '$lib/server/logger';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 
 const ADMIN_API_PREFIXES = [
 	'/api/operators',
@@ -28,12 +29,14 @@ function isAdminSubdomain(hostname: string): boolean {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+	const requestId = crypto.randomUUID();
+	event.locals.requestId = requestId;
 	const { pathname } = event.url;
+	const start = performance.now();
+	const log = createRequestLogger(requestId);
 	const onAdminSubdomain = isAdminSubdomain(event.url.hostname);
 	event.locals.adminBase = onAdminSubdomain ? '' : '/admin';
 
-	// On admin subdomain, redirect /admin/* paths to strip the prefix
-	// so users see clean URLs (e.g. /admin/operators → /operators)
 	if (onAdminSubdomain && pathname.startsWith('/admin')) {
 		const newPath = pathname.slice('/admin'.length) || '/';
 		const search = event.url.search;
@@ -44,14 +47,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	if (isAdminApiRoute(pathname)) {
-		// Bootstrap mode: allow creating the first admin operator when none exist
 		if (pathname === '/api/operators' && event.request.method === 'POST') {
 			const adminCount = await db
 				.select({ id: operators.id })
 				.from(operators)
 				.where(and(eq(operators.isAdmin, true), eq(operators.isActive, true)));
 			if (adminCount.length === 0) {
-				return resolve(event);
+				const response = await resolve(event);
+				return addRequestIdHeader(response, requestId);
 			}
 		}
 
@@ -59,11 +62,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (!token) {
 			return new Response(JSON.stringify({ error: 'Admin authentication required' }), {
 				status: 401,
-				headers: { 'Content-Type': 'application/json' }
+				headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
 			});
 		}
 
-		// Single JOIN query: validate session + check admin status in one round-trip
 		const [validAdmin] = await db
 			.select({ operatorId: adminSessions.operatorId })
 			.from(adminSessions)
@@ -79,10 +81,29 @@ export const handle: Handle = async ({ event, resolve }) => {
 			event.cookies.delete('adminSession', { path: '/' });
 			return new Response(JSON.stringify({ error: 'Admin authentication required' }), {
 				status: 401,
-				headers: { 'Content-Type': 'application/json' }
+				headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
 			});
 		}
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+	const duration = Math.round(performance.now() - start);
+
+	if (pathname.startsWith('/api/')) {
+		log.info({ method: event.request.method, pathname, status: response.status, duration }, 'request');
+	}
+
+	return addRequestIdHeader(response, requestId);
+};
+
+function addRequestIdHeader(response: Response, requestId: string): Response {
+	const newResponse = new Response(response.body, response);
+	newResponse.headers.set('X-Request-Id', requestId);
+	return newResponse;
+}
+
+export const handleError: HandleServerError = ({ error, event }) => {
+	const requestId = event.locals.requestId || 'unknown';
+	logger.error({ err: error, requestId, pathname: event.url.pathname }, 'unhandled_error');
+	return { message: 'Internal error' };
 };

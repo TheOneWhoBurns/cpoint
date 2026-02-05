@@ -10,7 +10,7 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
-	const { name, requiresGuide, price } = await request.json();
+	const { name, requiresGuide, price, info, multimediaLinks } = await request.json();
 
 	if (!name) {
 		return json({ error: 'Product name required' }, { status: 400 });
@@ -25,7 +25,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		.values({
 			name,
 			requiresGuide: requiresGuide ?? false,
-			price: Math.round(price * 100)
+			price: Math.round(price * 100),
+			info: info || null,
+			multimediaLinks: multimediaLinks || null
 		})
 		.returning();
 
@@ -33,7 +35,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 export const PATCH: RequestHandler = async ({ request }) => {
-	const { id, isActive } = await request.json();
+	const { id, isActive, name, requiresGuide, price, info, multimediaLinks } = await request.json();
 
 	if (!id) {
 		return json({ error: 'Product ID required' }, { status: 400 });
@@ -41,6 +43,11 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 	const updates: Record<string, unknown> = {};
 	if (isActive !== undefined) updates.isActive = isActive;
+	if (name !== undefined) updates.name = name;
+	if (requiresGuide !== undefined) updates.requiresGuide = requiresGuide;
+	if (price !== undefined) updates.price = Math.round(price * 100);
+	if (info !== undefined) updates.info = info || null;
+	if (multimediaLinks !== undefined) updates.multimediaLinks = multimediaLinks || null;
 
 	const [updated] = await db
 		.update(tourAgencyProducts)

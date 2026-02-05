@@ -144,6 +144,8 @@ export const tourAgencyProducts = pgTable('tour_agency_products', {
 	name: text('name').notNull(),
 	requiresGuide: boolean('requires_guide').default(false),
 	price: integer('price').notNull(),
+	info: text('info'),
+	multimediaLinks: jsonb('multimedia_links').$type<string[]>(),
 	isActive: boolean('is_active').default(true),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });

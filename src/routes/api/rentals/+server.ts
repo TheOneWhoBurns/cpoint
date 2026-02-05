@@ -3,6 +3,10 @@ import { db } from '$lib/server/db';
 import { rentals, trackedItems, productTypes, rentalProducts, guides, payments, reservations, operators } from '$lib/server/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { verifyPasscode } from '$lib/server/auth';
+import { checkGuideCooldown } from '$lib/server/business/guide-cooldown';
+import { findRentalReservationConflicts } from '$lib/server/business/reservations';
+import { computeTrackedItemChanges, computeGenericDelta } from '$lib/server/business/inventory';
+import { calculateRentalPrice, applyDiscount, validatePaymentSplit, buildClosePricing } from '$lib/server/business/pricing';
 import type { RequestHandler } from './$types';
 
 interface ReservationItem {
@@ -81,13 +85,13 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			.limit(1);
 
 		if (lastRental && lastRental.returnedAt) {
-			const returnTime = new Date(lastRental.returnedAt).getTime();
-			const cooldownMs = (guide.cooldownMinutes ?? 30) * 60 * 1000;
-			const now = Date.now();
-
-			if (now < returnTime + cooldownMs) {
-				const minutesLeft = Math.ceil((returnTime + cooldownMs - now) / 60000);
-				return json({ error: `Guide is on cooldown for ${minutesLeft} more minute(s)` }, { status: 400 });
+			const cooldown = checkGuideCooldown({
+				lastReturnedAt: lastRental.returnedAt,
+				cooldownMinutes: guide.cooldownMinutes ?? 30,
+				now: new Date()
+			});
+			if (cooldown.onCooldown) {
+				return json({ error: `Guide is on cooldown for ${cooldown.minutesLeft} more minute(s)` }, { status: 400 });
 			}
 		}
 	}
@@ -103,34 +107,19 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				.from(reservations)
 				.where(eq(reservations.status, 'active'));
 
-			const now = new Date();
-			const conflicts = [];
-
-			for (const res of activeReservations) {
-				const resItems = res.items as ReservationItem[];
-				const resFrom = new Date(res.reservedFrom);
-				const resUntil = new Date(res.reservedUntil);
-
-				if (now < resUntil && resFrom <= resUntil) {
-					const resTrackedIds = resItems
-						.filter(i => i.type === 'tracked' && i.itemId)
-						.map(i => i.itemId!);
-
-					const overlappingIds = rentalTrackedIds.filter((id: number) => resTrackedIds.includes(id));
-					if (overlappingIds.length > 0) {
-						if (!overrideReservationIds || !overrideReservationIds.includes(res.id)) {
-							conflicts.push({
-								id: res.id,
-								customer: res.customer,
-								reason: res.reason,
-								reservedFrom: res.reservedFrom,
-								reservedUntil: res.reservedUntil,
-								items: resItems.filter(i => i.itemId && overlappingIds.includes(i.itemId))
-							});
-						}
-					}
-				}
-			}
+			const conflicts = findRentalReservationConflicts({
+				rentalTrackedIds,
+				activeReservations: activeReservations.map(r => ({
+					id: r.id,
+					items: r.items as ReservationItem[],
+					customer: r.customer as { name?: string } | null,
+					reason: r.reason,
+					reservedFrom: r.reservedFrom,
+					reservedUntil: r.reservedUntil
+				})),
+				now: new Date(),
+				overrideReservationIds
+			});
 
 			if (conflicts.length > 0) {
 				if (overrideReservationIds && operatorPasscode) {
@@ -265,21 +254,22 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			}
 
 			const oldItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
-			const oldTrackedIds = new Set(oldItems.filter(i => i.type === 'tracked' && i.itemId).map(i => i.itemId));
-			const newTrackedIds = new Set(newItems.filter((i: any) => i.type === 'tracked' && i.itemId).map((i: any) => i.itemId));
+			const { toRelease, toClaim } = computeTrackedItemChanges(oldItems, newItems);
+			const genericDeltas = computeGenericDelta(oldItems, newItems);
 
 			const inventoryResult = await db.transaction(async (tx) => {
+				for (const itemId of toClaim) {
+					const [tracked] = await tx.select().from(trackedItems).where(eq(trackedItems.id, itemId));
+					if (!tracked || tracked.status !== 'available') {
+						const item = newItems.find((i: any) => i.itemId === itemId);
+						return { error: `Item ${item?.code || itemId} is no longer available`, status: 400 };
+					}
+				}
+
 				for (const item of newItems) {
-					if (item.type === 'tracked' && !oldTrackedIds.has(item.itemId)) {
-						const [tracked] = await tx.select().from(trackedItems).where(eq(trackedItems.id, item.itemId));
-						if (!tracked || tracked.status !== 'available') {
-							return { error: `Item ${item.code || item.itemId} is no longer available`, status: 400 };
-						}
-					} else if (item.type === 'generic') {
+					if (item.type === 'generic') {
 						const oldGeneric = oldItems.find(i => i.type === 'generic' && i.categoryId === item.categoryId);
-						const oldQty = oldGeneric?.quantity || 0;
-						const newQty = item.quantity || 1;
-						const additionalNeeded = newQty - oldQty;
+						const additionalNeeded = (item.quantity || 1) - (oldGeneric?.quantity || 0);
 						if (additionalNeeded > 0) {
 							const [cat] = await tx.select().from(productTypes).where(eq(productTypes.id, item.categoryId));
 							if (!cat) {
@@ -292,41 +282,18 @@ export const PATCH: RequestHandler = async ({ request }) => {
 					}
 				}
 
-				for (const item of oldItems) {
-					if (item.type === 'tracked' && item.itemId && !newTrackedIds.has(item.itemId)) {
-						await tx.update(trackedItems).set({ status: 'available' }).where(eq(trackedItems.id, item.itemId));
-					}
+				for (const itemId of toRelease) {
+					await tx.update(trackedItems).set({ status: 'available' }).where(eq(trackedItems.id, itemId));
 				}
 
-				for (const item of newItems) {
-					if (item.type === 'tracked' && item.itemId && !oldTrackedIds.has(item.itemId)) {
-						await tx.update(trackedItems).set({ status: 'rented' }).where(eq(trackedItems.id, item.itemId));
-					}
+				for (const itemId of toClaim) {
+					await tx.update(trackedItems).set({ status: 'rented' }).where(eq(trackedItems.id, itemId));
 				}
 
-				const oldGenericMap = new Map<number, number>();
-				for (const item of oldItems) {
-					if (item.type === 'generic' && item.categoryId) {
-						oldGenericMap.set(item.categoryId, (oldGenericMap.get(item.categoryId) || 0) + (item.quantity || 1));
-					}
-				}
-				const newGenericMap = new Map<number, number>();
-				for (const item of newItems) {
-					if (item.type === 'generic' && item.categoryId) {
-						newGenericMap.set(item.categoryId, (newGenericMap.get(item.categoryId) || 0) + (item.quantity || 1));
-					}
-				}
-
-				const allCategoryIds = new Set([...oldGenericMap.keys(), ...newGenericMap.keys()]);
-				for (const catId of allCategoryIds) {
-					const oldQty = oldGenericMap.get(catId) || 0;
-					const newQty = newGenericMap.get(catId) || 0;
-					const diff = newQty - oldQty;
-					if (diff !== 0) {
-						await tx.update(productTypes)
-							.set({ availableQuantity: sql`${productTypes.availableQuantity} - ${diff}` })
-							.where(eq(productTypes.id, catId));
-					}
+				for (const [catId, diff] of genericDeltas) {
+					await tx.update(productTypes)
+						.set({ availableQuantity: sql`${productTypes.availableQuantity} - ${diff}` })
+						.where(eq(productTypes.id, catId));
 				}
 
 				return { success: true };
@@ -398,43 +365,35 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const rentalItems = rental.items as Array<{type: string, itemId?: number, categoryId?: number, quantity?: number}>;
 		const pricing = rental.pricing as {type: string, hourly?: number, fullDay?: number};
 
-		let calculatedPrice = 0;
-		if (pricing.type === 'fullDay') {
-			calculatedPrice = Math.round(pricing.fullDay || 0);
-		} else if (pricing.type === 'hourly') {
-			const startTime = new Date(rental.startedAt).getTime();
-			const endTime = new Date().getTime();
-			const diffMs = endTime - startTime;
-			const diffMinutes = Math.floor(diffMs / (1000 * 60));
-			const hourlyRate = pricing.hourly || 0;
-			const halfHours = Math.max(1, Math.ceil(diffMinutes / 30));
-			calculatedPrice = Math.round((hourlyRate / 2) * halfHours);
-		}
+		const calculatedPrice = calculateRentalPrice({
+			pricingType: pricing.type as 'hourly' | 'fullDay',
+			hourlyRate: pricing.hourly || 0,
+			fullDayRate: pricing.fullDay || 0,
+			startTime: new Date(rental.startedAt),
+			endTime: new Date()
+		});
 
-		const discount = Math.max(0, Math.min(Number(returnData?.discount) || 0, calculatedPrice));
-		const serverFinalPrice = calculatedPrice - discount;
-		const finalPrice = Math.max(0, serverFinalPrice);
+		const discountResult = applyDiscount(calculatedPrice, Number(returnData?.discount) || 0);
+		const finalPrice = discountResult.finalPrice;
 
 		const cashAmount = Math.max(0, Number(returnData?.cashAmount) || 0);
 		const creditAmount = Math.max(0, Number(returnData?.creditAmount) || 0);
 		const yetToPay = Math.max(0, Number(returnData?.yetToPay) || 0);
 
-		const totalPayment = cashAmount + creditAmount + yetToPay;
-		if (Math.abs(totalPayment - finalPrice) > 0) {
-			return json({ error: 'Payment amounts do not match final price' }, { status: 400 });
+		const paymentCheck = validatePaymentSplit({ cashAmount, creditAmount, yetToPay, finalPrice });
+		if (!paymentCheck.valid) {
+			return json({ error: paymentCheck.error }, { status: 400 });
 		}
 
-		const updatedPricing = {
-			...pricing,
+		const updatedPricing = buildClosePricing({
+			pricing,
 			calculatedPrice,
-			discount,
+			discount: discountResult.discount,
 			finalPrice,
-			total: finalPrice,
-			cashPaid: cashAmount,
-			creditPaid: creditAmount,
-			yetToPay,
-			paymentMethod: cashAmount > 0 && creditAmount > 0 ? 'split' : (creditAmount > 0 ? 'credit' : 'cash')
-		};
+			cashAmount,
+			creditAmount,
+			yetToPay
+		});
 
 		const updated = await db.transaction(async (tx) => {
 			for (const item of rentalItems) {

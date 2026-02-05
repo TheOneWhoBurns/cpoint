@@ -83,7 +83,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ error: 'End time must be after start time' }, { status: 400 });
 	}
 
-	// Check for overlapping active reservations on the same tracked items
 	const conflict = await validateNoOverlap(items as ReservationItem[], from, until);
 	if (conflict) {
 		return json(conflict, { status: 409 });
