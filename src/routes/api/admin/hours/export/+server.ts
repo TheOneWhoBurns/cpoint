@@ -37,6 +37,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	const dateFrom = fromParam ? new Date(fromParam + 'T00:00:00Z') : firstOfMonth;
 	const dateTo = toParam ? new Date(toParam + 'T23:59:59.999Z') : now;
 
+	if (isNaN(dateFrom.getTime()) || isNaN(dateTo.getTime())) {
+		return new Response(JSON.stringify({ error: 'Invalid date parameters' }), { status: 400 });
+	}
+
 	const rows = await db
 		.select({
 			id: shifts.id,
@@ -50,11 +54,12 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		.where(and(gte(shifts.startedAt, dateFrom), lte(shifts.startedAt, dateTo)));
 
 	const nowMs = now.getTime();
+	const rangeEndMs = dateTo.getTime();
 
 	const grouped = new Map<number, { operatorName: string; totalShifts: number; totalHours: number; activeShifts: number }>();
 	for (const r of rows) {
 		const start = new Date(r.startedAt).getTime();
-		const end = r.endedAt ? new Date(r.endedAt).getTime() : nowMs;
+		const end = r.endedAt ? new Date(r.endedAt).getTime() : Math.min(nowMs, rangeEndMs);
 		const hours = (end - start) / 3600000;
 		const existing = grouped.get(r.operatorId!);
 		if (existing) {
@@ -110,7 +115,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
 		.map((r) => {
 			const start = new Date(r.startedAt).getTime();
-			const end = r.endedAt ? new Date(r.endedAt).getTime() : nowMs;
+			const end = r.endedAt ? new Date(r.endedAt).getTime() : Math.min(nowMs, rangeEndMs);
 			const hours = (end - start) / 3600000;
 			return {
 				'Operator': r.operatorName,

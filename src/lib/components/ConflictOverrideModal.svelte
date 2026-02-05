@@ -48,14 +48,14 @@
 </script>
 
 {#if open}
-	<div class="modal-overlay" onclick={close} style="z-index: 300;">
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+	<div class="modal-overlay" onclick={close} onkeydown={(e) => { if (e.key === 'Escape') close(); }} style="z-index: 300;">
+		<div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="conflict-override-title" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
-					<h2 class="md-headline-small">Reservation Conflict</h2>
+					<h2 id="conflict-override-title" class="md-headline-small">Reservation Conflict</h2>
 				</div>
-				<md-icon-button onclick={close}>
+				<md-icon-button onclick={close} aria-label="Close">
 					<span class="material-symbols-rounded">close</span>
 				</md-icon-button>
 			</div>

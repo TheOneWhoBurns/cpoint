@@ -13,6 +13,10 @@ export const load: PageServerLoad = async ({ url }) => {
 	const dateFrom = fromParam ? new Date(fromParam + 'T00:00:00Z') : firstOfMonth;
 	const dateTo = toParam ? new Date(toParam + 'T23:59:59.999Z') : now;
 
+	if (isNaN(dateFrom.getTime()) || isNaN(dateTo.getTime())) {
+		return { summary: [], shifts: [], dateFrom: firstOfMonth.toISOString().split('T')[0], dateTo: now.toISOString().split('T')[0] };
+	}
+
 	const rows = await db
 		.select({
 			id: shifts.id,

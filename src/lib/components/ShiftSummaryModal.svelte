@@ -20,6 +20,7 @@
 	let cashCounted = $state('');
 	let checklistItems = $state<Array<{ id: number; label: string }>>([]);
 	let closeChecklist = $state<Record<number, boolean>>({});
+	let ending = $state(false);
 
 	export function setChecklist(items: Array<{ id: number; label: string }>) {
 		checklistItems = items;
@@ -57,14 +58,14 @@
 </script>
 
 {#if open && shiftSummary}
-	<div class="modal-overlay" onclick={close}>
-		<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+	<div class="modal-overlay" onclick={close} onkeydown={(e) => { if (e.key === 'Escape') close(); }}>
+		<div class="modal-content large" role="dialog" aria-modal="true" aria-labelledby="shift-summary-title" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">fact_check</span>
-					<h2 class="md-headline-small">Close Shift</h2>
+					<h2 id="shift-summary-title" class="md-headline-small">Close Shift</h2>
 				</div>
-				<md-icon-button onclick={close}>
+				<md-icon-button onclick={close} aria-label="Close">
 					<span class="material-symbols-rounded">close</span>
 				</md-icon-button>
 			</div>
@@ -186,10 +187,10 @@
 				{/if}
 			</div>
 			<div class="modal-footer">
-				<md-outlined-button onclick={close}>Cancel</md-outlined-button>
-				<md-filled-button class="danger-btn" onclick={() => { close(); onEndShift(); }}>
+				<md-outlined-button onclick={close} disabled={ending}>Cancel</md-outlined-button>
+				<md-filled-button class="danger-btn" onclick={async () => { ending = true; try { await onEndShift(); close(); } finally { ending = false; } }} disabled={ending}>
 					<span class="material-symbols-rounded" slot="icon">assignment</span>
-					End Shift & Export Report
+					{ending ? 'Ending Shift...' : 'End Shift & Export Report'}
 				</md-filled-button>
 			</div>
 		</div>

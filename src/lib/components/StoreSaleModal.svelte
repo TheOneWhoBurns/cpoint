@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '@material/web/button/filled-button.js';
 	import '@material/web/button/outlined-button.js';
+	import '@material/web/iconbutton/icon-button.js';
 
 	let {
 		open = $bindable(false),
@@ -18,7 +19,7 @@
 	let saleQuantity = $state(1);
 	let saleError = $state('');
 
-	const selectedStoreProduct = $derived(selectedStoreProductId ? storeProducts.find((p: any) => p.id === selectedStoreProductId) : null);
+	const selectedStoreProduct = $derived(selectedStoreProductId != null ? storeProducts.find((p: any) => p.id === selectedStoreProductId) : null);
 
 	function close() {
 		open = false;
@@ -58,10 +59,10 @@
 						<span class="material-symbols-rounded">inventory_2</span>
 						<span class="md-title-small">Select Product</span>
 					</label>
-					<select class="form-select" bind:value={selectedStoreProductId} disabled={loading}>
-						<option value={null}>Choose a product...</option>
+					<select class="form-select" onchange={(e) => { const v = e.currentTarget.value; selectedStoreProductId = v ? Number(v) : null; }} disabled={loading}>
+						<option value="">Choose a product...</option>
 						{#each storeProducts as product}
-							<option value={product.id}>{product.name} - ${Math.round(product.price / 100)} ({product.quantity} in stock)</option>
+							<option value={product.id} selected={selectedStoreProductId === product.id}>{product.name} - ${Math.round(product.price / 100)} ({product.quantity} in stock)</option>
 						{/each}
 					</select>
 				</div>

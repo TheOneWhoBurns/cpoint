@@ -147,15 +147,19 @@
 			return { type: 'generic', categoryId: item.categoryId, name: item.name, quantity: (item.quantity ?? 1) * rentalQuantity };
 		}).flat().filter(Boolean);
 
-		await onSubmit({
-			productId: selectedProductId,
-			customer: { name: customerName, hotel: customerHotel, phone: customerPhone, id: customerId },
-			items: rentalItems,
-			rentalType,
-			quantity: rentalQuantity,
-			guideId: selectedGuideId || null,
-			fromReservationId: fromReservationId || undefined
-		});
+		try {
+			await onSubmit({
+				productId: selectedProductId,
+				customer: { name: customerName, hotel: customerHotel, phone: customerPhone, id: customerId },
+				items: rentalItems,
+				rentalType,
+				quantity: rentalQuantity,
+				guideId: selectedGuideId || null,
+				fromReservationId: fromReservationId || undefined
+			});
+		} catch (e: any) {
+			error = e.message || 'Failed to create rental';
+		}
 	}
 </script>
 

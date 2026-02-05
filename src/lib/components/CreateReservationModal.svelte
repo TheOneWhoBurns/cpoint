@@ -138,6 +138,14 @@
 		if (!reservationFrom || !reservationUntil) { reservationError = 'Start and end times required'; return; }
 
 		const equipment = reservationEquipment;
+		for (const item of equipment.filter(e => e.type === 'tracked')) {
+			const selectedIds = reservationTrackedItems[item.categoryId ?? 0] || [];
+			if (selectedIds.length !== reservationQuantity) {
+				reservationError = `Select ${reservationQuantity} items for ${item.name}`;
+				return;
+			}
+		}
+
 		const resItems = equipment.map(item => {
 			if (item.type === 'tracked') {
 				const selectedIds = reservationTrackedItems[item.categoryId ?? 0] || [];
