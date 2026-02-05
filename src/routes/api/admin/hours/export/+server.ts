@@ -77,8 +77,9 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	function fmtHours(h: number): string {
-		const hrs = Math.floor(h);
-		const mins = Math.round((h - hrs) * 60);
+		const totalMinutes = Math.round(h * 60);
+		const hrs = Math.floor(totalMinutes / 60);
+		const mins = totalMinutes % 60;
 		return `${hrs}h ${mins}m`;
 	}
 

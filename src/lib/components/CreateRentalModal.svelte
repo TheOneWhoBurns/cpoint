@@ -164,14 +164,14 @@
 </script>
 
 {#if open}
-	<div class="modal-overlay" onclick={resetForm}>
-		<div class="modal-content large" onclick={(e) => e.stopPropagation()}>
+	<div class="modal-overlay" onclick={resetForm} onkeydown={(e) => { if (e.key === 'Escape') resetForm(); }}>
+		<div class="modal-content large" role="dialog" aria-modal="true" aria-labelledby="create-rental-title" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
 				<div class="modal-title">
 					<span class="material-symbols-rounded">{fromReservationId ? 'event' : 'add_shopping_cart'}</span>
-					<h2 class="md-headline-small">{fromReservationId ? 'Start Rental from Reservation' : 'Create Rental'}</h2>
+					<h2 id="create-rental-title" class="md-headline-small">{fromReservationId ? 'Start Rental from Reservation' : 'Create Rental'}</h2>
 				</div>
-				<md-icon-button onclick={resetForm}>
+				<md-icon-button onclick={resetForm} aria-label="Close">
 					<span class="material-symbols-rounded">close</span>
 				</md-icon-button>
 			</div>

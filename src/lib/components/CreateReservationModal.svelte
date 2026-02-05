@@ -185,7 +185,7 @@
 					<span class="material-symbols-rounded">event</span>
 					<h2 class="md-headline-small">New Reservation</h2>
 				</div>
-				<md-icon-button onclick={close}>
+				<md-icon-button onclick={close} aria-label="Close">
 					<span class="material-symbols-rounded">close</span>
 				</md-icon-button>
 			</div>
@@ -208,11 +208,11 @@
 						<span class="md-title-small">Quantity</span>
 					</label>
 					<div class="quantity-control">
-						<button class="qty-btn" onclick={() => reservationQuantity = Math.max(1, reservationQuantity - 1)} disabled={loading || reservationQuantity <= 1}>
+						<button class="qty-btn" onclick={() => reservationQuantity = Math.max(1, reservationQuantity - 1)} disabled={loading || reservationQuantity <= 1} aria-label="Decrease quantity">
 							<span class="material-symbols-rounded">remove</span>
 						</button>
 						<span class="qty-value md-title-large">{reservationQuantity}</span>
-						<button class="qty-btn" onclick={() => reservationQuantity = Math.min(10, reservationQuantity + 1)} disabled={loading || reservationQuantity >= 10}>
+						<button class="qty-btn" onclick={() => reservationQuantity = Math.min(10, reservationQuantity + 1)} disabled={loading || reservationQuantity >= 10} aria-label="Increase quantity">
 							<span class="material-symbols-rounded">add</span>
 						</button>
 					</div>

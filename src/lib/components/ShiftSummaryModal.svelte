@@ -52,6 +52,7 @@
 	);
 
 	function close() {
+		if (ending) return;
 		open = false;
 		cashCounted = '';
 	}
