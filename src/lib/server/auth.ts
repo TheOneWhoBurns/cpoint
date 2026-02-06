@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { logger } from '$lib/server/logger';
 import { db } from '$lib/server/db';
-import { rateLimits, operatorSessions } from '$lib/server/db/schema';
+import { rateLimits, operatorSessions, operators, guides } from '$lib/server/db/schema';
 import { eq, lt } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import type { Cookies } from '@sveltejs/kit';
@@ -28,8 +28,32 @@ export async function verifyPasscode(passcode: string, stored: string): Promise<
 	if (stored.startsWith('$2a$') || stored.startsWith('$2b$')) {
 		return bcrypt.compare(passcode, stored);
 	}
-	logger.warn('Rejected login attempt against unhashed passcode');
+	// Plaintext passcode — compare directly (legacy migration path)
+	if (passcode === stored) {
+		logger.warn('Matched plaintext passcode — will be rehashed on next login');
+		return true;
+	}
 	return false;
+}
+
+/**
+ * Rehash a plaintext passcode in the DB. Call after successful verifyPasscode.
+ */
+export async function rehashIfPlaintext(
+	table: 'operators' | 'guides',
+	id: number,
+	stored: string
+): Promise<void> {
+	if (stored.startsWith(HASH_PREFIX) || stored.startsWith('$2a$') || stored.startsWith('$2b$')) {
+		return; // Already hashed
+	}
+	const hashed = await hashPasscode(stored);
+	if (table === 'operators') {
+		await db.update(operators).set({ passcode: hashed }).where(eq(operators.id, id));
+	} else {
+		await db.update(guides).set({ passcode: hashed }).where(eq(guides.id, id));
+	}
+	logger.info({ table, id }, 'Rehashed plaintext passcode');
 }
 
 export function logAuthFailure(endpoint: string, identifier: string, ip: string): void {
