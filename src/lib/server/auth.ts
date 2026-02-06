@@ -74,6 +74,8 @@ const CLEANUP_EVERY_N = 20;
 export async function checkRateLimit(key: string): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
 	const now = new Date();
 	const resetAt = new Date(now.getTime() + WINDOW_MS);
+	const nowIso = now.toISOString();
+	const resetAtIso = resetAt.toISOString();
 
 	if (++cleanupCounter >= CLEANUP_EVERY_N) {
 		cleanupCounter = 0;
@@ -86,8 +88,8 @@ export async function checkRateLimit(key: string): Promise<{ allowed: boolean; r
 		.onConflictDoUpdate({
 			target: rateLimits.key,
 			set: {
-				count: sql`CASE WHEN ${rateLimits.resetAt} < ${now} THEN 1 ELSE ${rateLimits.count} + 1 END`,
-				resetAt: sql`CASE WHEN ${rateLimits.resetAt} < ${now} THEN ${resetAt} ELSE ${rateLimits.resetAt} END`
+				count: sql`CASE WHEN ${rateLimits.resetAt} < ${nowIso}::timestamptz THEN 1 ELSE ${rateLimits.count} + 1 END`,
+				resetAt: sql`CASE WHEN ${rateLimits.resetAt} < ${nowIso}::timestamptz THEN ${resetAtIso}::timestamptz ELSE ${rateLimits.resetAt} END`
 			}
 		})
 		.returning({ count: rateLimits.count, resetAt: rateLimits.resetAt });
