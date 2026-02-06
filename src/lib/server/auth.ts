@@ -1,6 +1,12 @@
 import bcrypt from 'bcryptjs';
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { logger } from '$lib/server/logger';
+import { db } from '$lib/server/db';
+import { rateLimits } from '$lib/server/db/schema';
+import { eq, lt } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
+import { env } from '$env/dynamic/private';
+import type { Cookies } from '@sveltejs/kit';
 
 const SALT_ROUNDS = 10;
 const SCRYPT_KEYLEN = 32;
@@ -23,7 +29,6 @@ export async function verifyPasscode(passcode: string, stored: string): Promise<
 	if (stored.startsWith('$2a$') || stored.startsWith('$2b$')) {
 		return bcrypt.compare(passcode, stored);
 	}
-	// Reject plaintext-stored passcodes — they must be rehashed
 	logger.warn('Rejected login attempt against unhashed passcode');
 	return false;
 }
@@ -37,54 +42,74 @@ export function generateSessionToken(): string {
 	return randomBytes(32).toString('hex');
 }
 
-const attempts = new Map<string, { count: number; resetAt: number }>();
-
 const MAX_ATTEMPTS = 20;
 const WINDOW_MS = 15 * 60 * 1000;
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
-// Periodically purge expired entries to prevent unbounded memory growth
-setInterval(() => {
-	const now = Date.now();
-	for (const [key, entry] of attempts) {
-		if (now >= entry.resetAt) {
-			attempts.delete(key);
-		}
-	}
-}, CLEANUP_INTERVAL_MS).unref();
+let cleanupCounter = 0;
+const CLEANUP_EVERY_N = 20;
 
-export function checkRateLimit(key: string): { allowed: boolean; retryAfterSeconds?: number } {
-	const now = Date.now();
-	pruneExpiredEntries(now);
-	const entry = attempts.get(key);
+export async function checkRateLimit(key: string): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
+	const now = new Date();
+	const resetAt = new Date(now.getTime() + WINDOW_MS);
 
-	if (entry && now < entry.resetAt) {
-		if (entry.count >= MAX_ATTEMPTS) {
-			const retryAfterSeconds = Math.ceil((entry.resetAt - now) / 1000);
-			return { allowed: false, retryAfterSeconds };
-		}
-		entry.count++;
-		return { allowed: true };
+	if (++cleanupCounter >= CLEANUP_EVERY_N) {
+		cleanupCounter = 0;
+		db.delete(rateLimits).where(lt(rateLimits.resetAt, now)).execute().catch(() => {});
 	}
 
-	attempts.set(key, { count: 1, resetAt: now + WINDOW_MS });
+	const result = await db
+		.insert(rateLimits)
+		.values({ key, count: 1, resetAt })
+		.onConflictDoUpdate({
+			target: rateLimits.key,
+			set: {
+				count: sql`CASE WHEN ${rateLimits.resetAt} < ${now} THEN 1 ELSE ${rateLimits.count} + 1 END`,
+				resetAt: sql`CASE WHEN ${rateLimits.resetAt} < ${now} THEN ${resetAt} ELSE ${rateLimits.resetAt} END`
+			}
+		})
+		.returning({ count: rateLimits.count, resetAt: rateLimits.resetAt });
+
+	const row = result[0];
+	if (row.count > MAX_ATTEMPTS) {
+		const retryAfterSeconds = Math.ceil((row.resetAt.getTime() - now.getTime()) / 1000);
+		return { allowed: false, retryAfterSeconds };
+	}
+
 	return { allowed: true };
 }
 
-export function clearRateLimit(key: string): void {
-	attempts.delete(key);
+export async function clearRateLimit(key: string): Promise<void> {
+	await db.delete(rateLimits).where(eq(rateLimits.key, key));
 }
 
-// Prune expired entries periodically to prevent memory leaks
-let lastPrune = 0;
-const PRUNE_INTERVAL_MS = 60 * 1000;
+function getCookieSecret(): string {
+	const secret = env.COOKIE_SECRET;
+	if (!secret) throw new Error('COOKIE_SECRET environment variable is required');
+	return secret;
+}
 
-function pruneExpiredEntries(now: number): void {
-	if (now - lastPrune < PRUNE_INTERVAL_MS) return;
-	lastPrune = now;
-	for (const [key, entry] of attempts) {
-		if (now >= entry.resetAt) {
-			attempts.delete(key);
-		}
-	}
+export function signCookieValue(value: string): string {
+	const hmac = createHmac('sha256', getCookieSecret()).update(value).digest('hex');
+	return `${value}.${hmac}`;
+}
+
+export function verifyCookieValue(signed: string): string | null {
+	const dot = signed.lastIndexOf('.');
+	if (dot === -1) return null;
+	const value = signed.slice(0, dot);
+	const sig = signed.slice(dot + 1);
+	const expected = createHmac('sha256', getCookieSecret()).update(value).digest('hex');
+	if (sig.length !== expected.length) return null;
+	if (!timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
+	return value;
+}
+
+export function getVerifiedOperatorId(cookies: Cookies): number | null {
+	const raw = cookies.get('operatorId');
+	if (!raw) return null;
+	const value = verifyCookieValue(raw);
+	if (!value) return null;
+	const id = parseInt(value);
+	if (isNaN(id)) return null;
+	return id;
 }

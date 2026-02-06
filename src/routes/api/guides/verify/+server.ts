@@ -7,7 +7,7 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	const clientIp = getClientAddress();
-	const rateCheck = checkRateLimit(`guide-verify:${clientIp}`);
+	const rateCheck = await checkRateLimit(`guide-verify:${clientIp}`);
 	if (!rateCheck.allowed) {
 		return json(
 			{ error: 'Too many attempts. Try again later.' },
@@ -34,7 +34,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
-	clearRateLimit(`guide-verify:${clientIp}`);
+	await clearRateLimit(`guide-verify:${clientIp}`);
 
 	return json({ success: true, guide });
 };

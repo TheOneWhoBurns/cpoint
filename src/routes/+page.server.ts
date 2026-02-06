@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { rentalProducts, rentals, trackedItems, productTypes, guides, storeProducts, shifts, operators, tourAgencyProducts, tourBookings, reservations, storeSales } from '$lib/server/db/schema';
 import { eq, and, isNull, ne, desc } from 'drizzle-orm';
+import { getVerifiedOperatorId } from '$lib/server/auth';
 import type { Rental } from '$lib/server/db/schema';
 
 const PREVIOUS_RENTALS_LIMIT = 50;
@@ -18,7 +19,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		db.select().from(reservations).where(eq(reservations.status, 'active'))
 	]);
 
-	const operatorIdStr = cookies.get('operatorId');
+	const operatorId = getVerifiedOperatorId(cookies);
 	let activeRentals: Rental[] = [];
 	let previousShiftRentals: Rental[] = [];
 	let shiftStoreSales: Array<{
@@ -48,8 +49,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		productName: string | null;
 	}> = [];
 
-	if (operatorIdStr) {
-		const operatorId = parseInt(operatorIdStr);
+	if (operatorId) {
 		const [currentShift] = await db
 			.select()
 			.from(shifts)

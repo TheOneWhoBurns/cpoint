@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { shifts, rentals, operators, storeSales, storeProducts, tourBookings, tourAgencyProducts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { logger } from '$lib/server/logger';
+import { getVerifiedOperatorId } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 import * as XLSX from 'xlsx';
 import { isGoogleConnected, createSpreadsheet } from '$lib/server/google-sheets';
@@ -51,12 +52,10 @@ interface Pricing {
 }
 
 export const POST: RequestHandler = async ({ cookies }) => {
-	const operatorIdStr = cookies.get('operatorId');
-	if (!operatorIdStr) {
+	const operatorId = getVerifiedOperatorId(cookies);
+	if (!operatorId) {
 		return new Response(JSON.stringify({ error: 'Not logged in' }), { status: 401 });
 	}
-
-	const operatorId = parseInt(operatorIdStr);
 
 	// Fetch operator and active shift in parallel
 	const [operatorResult, shiftResult] = await Promise.all([

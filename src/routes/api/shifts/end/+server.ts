@@ -3,15 +3,15 @@ import { db } from '$lib/server/db';
 import { shifts, rentals, operators } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
+import { getVerifiedOperatorId } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const operatorIdStr = cookies.get('operatorId');
-	if (!operatorIdStr) {
+	const operatorId = getVerifiedOperatorId(cookies);
+	if (!operatorId) {
 		return json({ error: 'Not logged in' }, { status: 401 });
 	}
 
-	const operatorId = parseInt(operatorIdStr);
 	const [operator] = await db.select({ id: operators.id }).from(operators)
 		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true)));
 	if (!operator) {

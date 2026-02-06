@@ -2,13 +2,13 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators, shifts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure } from '$lib/server/auth';
+import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure, signCookieValue } from '$lib/server/auth';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
 	const clientIp = getClientAddress();
-	const rateCheck = checkRateLimit(`shift-start:${clientIp}`);
+	const rateCheck = await checkRateLimit(`shift-start:${clientIp}`);
 	if (!rateCheck.allowed) {
 		return json(
 			{ error: 'Too many login attempts. Try again later.' },
@@ -38,7 +38,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
-	clearRateLimit(`shift-start:${clientIp}`);
+	await clearRateLimit(`shift-start:${clientIp}`);
 
 	const [existingShift] = await db
 		.select()
@@ -56,7 +56,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 		shift = newShift;
 	}
 
-	cookies.set('operatorId', String(operatorId), {
+	cookies.set('operatorId', signCookieValue(String(operatorId)), {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
