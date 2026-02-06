@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { guides } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure } from '$lib/server/auth';
+import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure, rehashIfPlaintext } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
@@ -35,6 +35,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	}
 
 	await clearRateLimit(`guide-verify:${clientIp}`);
+	rehashIfPlaintext('guides', guideId, guide.passcode).catch(() => {});
 
 	return json({ success: true, guide });
 };

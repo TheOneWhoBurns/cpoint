@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators, adminSessions } from '$lib/server/db/schema';
 import { eq, and, lt } from 'drizzle-orm';
-import { verifyPasscode, generateSessionToken, checkRateLimit, clearRateLimit } from '$lib/server/auth';
+import { verifyPasscode, generateSessionToken, checkRateLimit, clearRateLimit, rehashIfPlaintext } from '$lib/server/auth';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
@@ -49,6 +49,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 	}
 
 	await clearRateLimit(`admin-login:${clientIp}`);
+	rehashIfPlaintext('operators', operator.id, operator.passcode).catch(() => {});
 
 	const token = generateSessionToken();
 	const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000);

@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators, shifts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure, createOperatorSession } from '$lib/server/auth';
+import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure, createOperatorSession, rehashIfPlaintext } from '$lib/server/auth';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
@@ -39,6 +39,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 	}
 
 	await clearRateLimit(`shift-start:${clientIp}`);
+	rehashIfPlaintext('operators', operatorId, operator.passcode).catch(() => {});
 
 	const [existingShift] = await db
 		.select()
