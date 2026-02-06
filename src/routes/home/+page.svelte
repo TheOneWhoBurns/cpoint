@@ -15,6 +15,8 @@
 
 	<footer class="home-footer">
 		<a href="/privacy" class="md-body-small">Privacy Policy</a>
+		<span class="md-body-small separator">|</span>
+		<a href="/terms" class="md-body-small">Terms of Service</a>
 	</footer>
 </div>
 
@@ -82,5 +84,10 @@
 
 	.home-footer a:hover {
 		text-decoration: underline;
+	}
+
+	.separator {
+		color: var(--md-sys-color-outline);
+		margin: 0 var(--md-sys-spacing-sm);
 	}
 </style>
