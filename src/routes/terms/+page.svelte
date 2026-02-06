@@ -1,75 +1,77 @@
 <svelte:head>
-	<title>Privacy Policy - Rental Manager</title>
+	<title>Terms of Service - Rental Manager</title>
 </svelte:head>
 
-<div class="privacy">
+<div class="terms">
 	<div class="content">
 		<a href="/home" class="back-link md-body-medium">
 			<span class="material-symbols-rounded">arrow_back</span>
 			Back to Home
 		</a>
 
-		<h1 class="md-headline-large">Privacy Policy</h1>
+		<h1 class="md-headline-large">Terms of Service</h1>
 		<p class="md-body-small updated">Last updated: February 2026</p>
 
 		<section>
-			<h2 class="md-title-large">Overview</h2>
+			<h2 class="md-title-large">Acceptance of Terms</h2>
 			<p class="md-body-large">
-				Rental Manager is an internal equipment rental and point-of-sale management system.
-				This policy describes how we handle data within the application.
+				By accessing and using Rental Manager, you agree to be bound by these terms of service.
+				This application is intended for authorized operators and staff only.
 			</p>
 		</section>
 
 		<section>
-			<h2 class="md-title-large">Data We Collect</h2>
+			<h2 class="md-title-large">Use of the Application</h2>
 			<p class="md-body-large">
-				The application stores data necessary for rental operations, including:
+				Rental Manager is an internal tool for managing equipment rentals, point-of-sale operations,
+				and shift tracking. Access is restricted to authorized personnel with valid credentials.
 			</p>
+		</section>
+
+		<section>
+			<h2 class="md-title-large">User Responsibilities</h2>
 			<ul class="md-body-large">
-				<li>Operator names and authentication credentials</li>
-				<li>Guide names and availability status</li>
-				<li>Equipment inventory and rental records</li>
-				<li>Sales transaction records</li>
-				<li>Shift logs and operational data</li>
+				<li>Keep your login credentials secure and do not share them</li>
+				<li>Use the application only for its intended business purposes</li>
+				<li>Report any unauthorized access or security concerns to the administrator</li>
+				<li>Ensure accuracy of rental and sales data entered into the system</li>
 			</ul>
 		</section>
 
 		<section>
-			<h2 class="md-title-large">Google API Usage</h2>
+			<h2 class="md-title-large">Google Services</h2>
 			<p class="md-body-large">
-				This application uses Google APIs (Sheets and Drive) solely to export shift reports.
-				We only access data you explicitly authorize and do not share it with third parties.
-				Our use of Google API data adheres to the
-				<a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">
-					Google API Services User Data Policy</a>, including the Limited Use requirements.
+				This application integrates with Google APIs for report export functionality.
+				Use of these features is subject to
+				<a href="https://policies.google.com/terms" target="_blank" rel="noopener">Google's Terms of Service</a>.
 			</p>
 		</section>
 
 		<section>
-			<h2 class="md-title-large">Data Storage</h2>
+			<h2 class="md-title-large">Limitation of Liability</h2>
 			<p class="md-body-large">
-				All data is stored on a secure server. We do not sell, share, or transfer data to
-				third parties beyond what is described above.
+				The application is provided "as is" without warranties of any kind.
+				We are not liable for any damages arising from the use of this application.
 			</p>
 		</section>
 
 		<section>
 			<h2 class="md-title-large">Contact</h2>
 			<p class="md-body-large">
-				For questions about this policy, contact the system administrator.
+				For questions about these terms, contact the system administrator.
 			</p>
 		</section>
 	</div>
 
-	<footer class="privacy-footer">
+	<footer class="terms-footer">
 		<a href="/home" class="md-body-small">Home</a>
 		<span class="md-body-small separator">|</span>
-		<a href="/terms" class="md-body-small">Terms of Service</a>
+		<a href="/privacy" class="md-body-small">Privacy Policy</a>
 	</footer>
 </div>
 
 <style>
-	.privacy {
+	.terms {
 		display: flex;
 		flex-direction: column;
 		min-height: 100vh;
@@ -134,17 +136,17 @@
 		color: var(--md-sys-color-primary);
 	}
 
-	.privacy-footer {
+	.terms-footer {
 		padding: var(--md-sys-spacing-md);
 		text-align: center;
 	}
 
-	.privacy-footer a {
+	.terms-footer a {
 		color: var(--md-sys-color-on-surface-variant);
 		text-decoration: none;
 	}
 
-	.privacy-footer a:hover {
+	.terms-footer a:hover {
 		text-decoration: underline;
 	}
 
