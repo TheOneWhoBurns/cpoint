@@ -7,7 +7,7 @@ import { getVerifiedOperatorId } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const operatorId = getVerifiedOperatorId(cookies);
+	const operatorId = await getVerifiedOperatorId(cookies);
 	if (!operatorId) {
 		return json({ error: 'Not logged in' }, { status: 401 });
 	}
@@ -15,7 +15,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const [operator] = await db.select({ id: operators.id }).from(operators)
 		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true)));
 	if (!operator) {
-		cookies.delete('operatorId', { path: '/' });
+		cookies.delete('operatorSession', { path: '/' });
 		return json({ error: 'Invalid session' }, { status: 401 });
 	}
 

@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { operators, shifts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure, signCookieValue } from '$lib/server/auth';
+import { verifyPasscode, checkRateLimit, clearRateLimit, logAuthFailure, createOperatorSession } from '$lib/server/auth';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 
@@ -56,7 +56,8 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 		shift = newShift;
 	}
 
-	cookies.set('operatorId', signCookieValue(String(operatorId)), {
+	const sessionToken = await createOperatorSession(operatorId);
+	cookies.set('operatorSession', sessionToken, {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',

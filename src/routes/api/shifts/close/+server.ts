@@ -2,7 +2,7 @@ import { db } from '$lib/server/db';
 import { shifts, rentals, operators, storeSales, storeProducts, tourBookings, tourAgencyProducts } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { logger } from '$lib/server/logger';
-import { getVerifiedOperatorId } from '$lib/server/auth';
+import { getVerifiedOperatorId, deleteOperatorSessions } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 import * as XLSX from 'xlsx';
 import { isGoogleConnected, createSpreadsheet } from '$lib/server/google-sheets';
@@ -52,7 +52,7 @@ interface Pricing {
 }
 
 export const POST: RequestHandler = async ({ cookies }) => {
-	const operatorId = getVerifiedOperatorId(cookies);
+	const operatorId = await getVerifiedOperatorId(cookies);
 	if (!operatorId) {
 		return new Response(JSON.stringify({ error: 'Not logged in' }), { status: 401 });
 	}
@@ -317,7 +317,8 @@ export const POST: RequestHandler = async ({ cookies }) => {
 
 			const url = await createSpreadsheet(filename, sheets);
 
-			cookies.delete('operatorId', { path: '/' });
+			await deleteOperatorSessions(operatorId);
+			cookies.delete('operatorSession', { path: '/' });
 
 			return new Response(JSON.stringify({ type: 'google_sheets', url }), {
 				headers: { 'Content-Type': 'application/json' }
@@ -349,7 +350,8 @@ export const POST: RequestHandler = async ({ cookies }) => {
 
 	const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-	cookies.delete('operatorId', { path: '/' });
+	await deleteOperatorSessions(operatorId);
+	cookies.delete('operatorSession', { path: '/' });
 
 	return new Response(buffer, {
 		headers: {

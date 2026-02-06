@@ -5,7 +5,7 @@ import { getVerifiedOperatorId } from '$lib/server/auth';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ cookies }) => {
-	const operatorId = getVerifiedOperatorId(cookies);
+	const operatorId = await getVerifiedOperatorId(cookies);
 
 	if (!operatorId) {
 		return { operator: null, shift: null };
@@ -17,7 +17,7 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
 		.where(and(eq(operators.id, operatorId), eq(operators.isActive, true)));
 
 	if (!operator) {
-		cookies.delete('operatorId', { path: '/' });
+		cookies.delete('operatorSession', { path: '/' });
 		return { operator: null, shift: null };
 	}
 
@@ -27,7 +27,7 @@ export const load: LayoutServerLoad = async ({ cookies }) => {
 		.where(and(eq(shifts.operatorId, operatorId), isNull(shifts.endedAt)));
 
 	if (!activeShift) {
-		cookies.delete('operatorId', { path: '/' });
+		cookies.delete('operatorSession', { path: '/' });
 		return { operator: null, shift: null };
 	}
 

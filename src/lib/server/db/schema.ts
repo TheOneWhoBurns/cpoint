@@ -248,6 +248,13 @@ export const adminSessions = pgTable('admin_sessions', {
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
 
+export const operatorSessions = pgTable('operator_sessions', {
+	id: serial('id').primaryKey(),
+	token: text('token').unique().notNull(),
+	operatorId: integer('operator_id').references(() => operators.id).notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+
 
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
@@ -261,3 +268,5 @@ export type ClosingChecklistItem = typeof closingChecklistItems.$inferSelect;
 export type NewClosingChecklistItem = typeof closingChecklistItems.$inferInsert;
 export type AdminSession = typeof adminSessions.$inferSelect;
 export type NewAdminSession = typeof adminSessions.$inferInsert;
+export type OperatorSession = typeof operatorSessions.$inferSelect;
+export type NewOperatorSession = typeof operatorSessions.$inferInsert;
