@@ -19,7 +19,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		db.select().from(reservations).where(eq(reservations.status, 'active'))
 	]);
 
-	const operatorId = getVerifiedOperatorId(cookies);
+	const operatorId = await getVerifiedOperatorId(cookies);
 	let activeRentals: Rental[] = [];
 	let previousShiftRentals: Rental[] = [];
 	let shiftStoreSales: Array<{

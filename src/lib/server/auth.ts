@@ -1,11 +1,10 @@
 import bcrypt from 'bcryptjs';
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { logger } from '$lib/server/logger';
 import { db } from '$lib/server/db';
-import { rateLimits } from '$lib/server/db/schema';
+import { rateLimits, operatorSessions } from '$lib/server/db/schema';
 import { eq, lt } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
-import { env } from '$env/dynamic/private';
 import type { Cookies } from '@sveltejs/kit';
 
 const SALT_ROUNDS = 10;
@@ -82,34 +81,32 @@ export async function clearRateLimit(key: string): Promise<void> {
 	await db.delete(rateLimits).where(eq(rateLimits.key, key));
 }
 
-function getCookieSecret(): string {
-	const secret = env.COOKIE_SECRET;
-	if (!secret) throw new Error('COOKIE_SECRET environment variable is required');
-	return secret;
+export async function createOperatorSession(operatorId: number): Promise<string> {
+	// Delete all existing sessions for this operator (transfers session to new login)
+	await db.delete(operatorSessions).where(eq(operatorSessions.operatorId, operatorId));
+
+	const token = randomBytes(32).toString('hex');
+	await db.insert(operatorSessions).values({ token, operatorId });
+	return token;
 }
 
-export function signCookieValue(value: string): string {
-	const hmac = createHmac('sha256', getCookieSecret()).update(value).digest('hex');
-	return `${value}.${hmac}`;
+export async function deleteOperatorSessions(operatorId: number): Promise<void> {
+	await db.delete(operatorSessions).where(eq(operatorSessions.operatorId, operatorId));
 }
 
-export function verifyCookieValue(signed: string): string | null {
-	const dot = signed.lastIndexOf('.');
-	if (dot === -1) return null;
-	const value = signed.slice(0, dot);
-	const sig = signed.slice(dot + 1);
-	const expected = createHmac('sha256', getCookieSecret()).update(value).digest('hex');
-	if (sig.length !== expected.length) return null;
-	if (!timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
-	return value;
-}
+export async function getVerifiedOperatorId(cookies: Cookies): Promise<number | null> {
+	const token = cookies.get('operatorSession');
+	if (!token) return null;
 
-export function getVerifiedOperatorId(cookies: Cookies): number | null {
-	const raw = cookies.get('operatorId');
-	if (!raw) return null;
-	const value = verifyCookieValue(raw);
-	if (!value) return null;
-	const id = parseInt(value);
-	if (isNaN(id)) return null;
-	return id;
+	const [session] = await db
+		.select({ operatorId: operatorSessions.operatorId })
+		.from(operatorSessions)
+		.where(eq(operatorSessions.token, token));
+
+	if (!session) {
+		cookies.delete('operatorSession', { path: '/' });
+		return null;
+	}
+
+	return session.operatorId;
 }
