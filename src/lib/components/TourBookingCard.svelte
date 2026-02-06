@@ -5,82 +5,98 @@
 	let {
 		booking,
 		loading = false,
+		onEdit,
 		onDelete,
 		onClose
 	}: {
 		booking: any;
 		loading?: boolean;
-		onDelete: (id: number) => void;
+		onEdit: (booking: any) => void;
+		onDelete: (id: number, label: string) => void;
 		onClose: (booking: any) => void;
 	} = $props();
 </script>
 
-<div class="tour-card" style="border-left: 4px solid var(--md-sys-color-primary);">
-	<div class="rental-header">
+<button
+	class="tour-card"
+	onclick={() => onEdit(booking)}
+	disabled={loading}
+>
+	<div class="card-header">
 		<div class="customer-info">
-			<span class="material-symbols-rounded customer-icon">tour</span>
+			<div class="avatar">
+				<span class="material-symbols-rounded">tour</span>
+			</div>
 			<div class="customer-details">
-				<span class="md-title-medium">{booking.productName}</span>
-				<span class="md-body-small hotel-text">
+				<span class="name">{booking.productName}</span>
+				<span class="meta">
 					<span class="material-symbols-rounded icon-xs">group</span>
 					{booking.pax} pax
 				</span>
 			</div>
 		</div>
-		<div class="price-badge">
-			${(booking.totalPrice / 100).toFixed(2)}
-		</div>
+		<span class="price-badge">${(booking.totalPrice / 100).toFixed(2)}</span>
 	</div>
 
-	<div class="tour-dates">
-		<div class="tour-date-row">
-			<span class="material-symbols-rounded icon-sm">event</span>
-			<span class="md-body-small">Booked: {new Date(booking.bookedAt).toLocaleDateString()}</span>
-		</div>
-		<div class="tour-date-row">
+	<div class="tour-info">
+		<div class="info-row">
 			<span class="material-symbols-rounded icon-sm">calendar_today</span>
-			<span class="md-body-small">Activity: {new Date(booking.activityDate).toLocaleDateString()}</span>
+			<span>Activity: {new Date(booking.activityDate).toLocaleDateString()}</span>
 		</div>
 	</div>
 
-	<div class="tour-pricing-row">
-		<span class="md-body-small">Price/person: ${(booking.unitPrice / 100).toFixed(2)}</span>
-	</div>
-
-	<div class="rental-footer">
+	<div class="card-footer">
 		<div class="time-info">
-			<span class="material-symbols-rounded icon-sm">schedule</span>
-			<span class="md-body-small">Created {booking.createdAt ? new Date(booking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+			<span>${(booking.unitPrice / 100).toFixed(2)}/person</span>
 		</div>
-		<div class="rental-actions">
-			<md-icon-button onclick={() => onDelete(booking.id)} disabled={loading} aria-label="Delete booking">
+		<div class="card-actions" onclick={(e) => e.stopPropagation()}>
+			<md-icon-button onclick={(e: Event) => { e.stopPropagation(); onDelete(booking.id, booking.productName || 'Booking'); }} disabled={loading} aria-label="Delete booking">
 				<span class="material-symbols-rounded delete-icon">delete</span>
 			</md-icon-button>
-			<md-filled-tonal-button onclick={() => onClose(booking)} disabled={loading}>
+			<md-filled-tonal-button onclick={(e: Event) => { e.stopPropagation(); onClose(booking); }} disabled={loading}>
 				<span class="material-symbols-rounded" slot="icon">check_circle</span>
 				Close
 			</md-filled-tonal-button>
 		</div>
 	</div>
-</div>
+</button>
 
 <style>
 	.tour-card {
 		background: var(--md-sys-color-surface-container-low);
 		border: 1px solid var(--md-sys-color-outline-variant);
-		border-radius: var(--md-sys-shape-corner-medium);
-		padding: var(--md-sys-spacing-md);
+		border-left: 4px solid var(--md-sys-color-primary);
+		border-radius: var(--md-sys-shape-corner-large);
+		padding: var(--md-sys-spacing-lg);
 		display: flex;
 		flex-direction: column;
-		gap: var(--md-sys-spacing-sm);
-		transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+		gap: var(--md-sys-spacing-md);
+		cursor: pointer;
+		width: 100%;
+		text-align: left;
+		font: inherit;
+		color: inherit;
+		transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+			border-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+			transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 	}
 
-	.tour-card:hover {
+	.tour-card:hover:not(:disabled) {
 		box-shadow: var(--md-sys-elevation-level2);
+		border-color: var(--md-sys-color-primary);
 	}
 
-	.rental-header {
+	.tour-card:active:not(:disabled) {
+		transform: scale(0.98);
+		box-shadow: none;
+	}
+
+	.tour-card:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.card-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
@@ -93,58 +109,64 @@
 		gap: var(--md-sys-spacing-sm);
 	}
 
-	.customer-icon {
-		font-size: 24px;
+	.avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
 		background: var(--md-sys-color-tertiary-container);
 		color: var(--md-sys-color-on-tertiary-container);
-		padding: var(--md-sys-spacing-sm);
 		border-radius: var(--md-sys-shape-corner-full);
+		flex-shrink: 0;
 	}
+
+	.avatar .material-symbols-rounded { font-size: 22px; }
 
 	.customer-details {
 		display: flex;
 		flex-direction: column;
+		gap: 2px;
 	}
 
-	.customer-details .md-title-medium {
+	.name {
+		font: var(--md-sys-typescale-title-medium);
 		color: var(--md-sys-color-on-surface);
 	}
 
-	.hotel-text {
+	.meta {
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-xs);
+		font: var(--md-sys-typescale-body-small);
 		color: var(--md-sys-color-on-surface-variant);
 	}
 
 	.price-badge {
 		background: var(--md-sys-color-primary);
 		color: var(--md-sys-color-on-primary);
-		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-sm);
+		padding: var(--md-sys-spacing-xs) var(--md-sys-spacing-md);
 		border-radius: var(--md-sys-shape-corner-full);
 		font: var(--md-sys-typescale-title-medium);
 		font-weight: 600;
 		flex-shrink: 0;
 	}
 
-	.tour-dates {
+	.tour-info {
 		display: flex;
 		flex-direction: column;
 		gap: var(--md-sys-spacing-xs);
 	}
 
-	.tour-date-row {
+	.info-row {
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-xs);
+		font: var(--md-sys-typescale-body-small);
 		color: var(--md-sys-color-on-surface-variant);
 	}
 
-	.tour-pricing-row {
-		color: var(--md-sys-color-on-surface-variant);
-	}
-
-	.rental-footer {
+	.card-footer {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
@@ -153,7 +175,7 @@
 		border-top: 1px solid var(--md-sys-color-outline-variant);
 	}
 
-	.rental-actions {
+	.card-actions {
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-xs);
@@ -163,6 +185,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--md-sys-spacing-xs);
+		font: var(--md-sys-typescale-body-small);
 		color: var(--md-sys-color-on-surface-variant);
 	}
 
