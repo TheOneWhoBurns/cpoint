@@ -203,6 +203,12 @@ export const payments = pgTable('payments', {
 	index('idx_payments_rental').on(table.rentalId)
 ]);
 
+export const rateLimits = pgTable('rate_limits', {
+	key: text('key').primaryKey(),
+	count: integer('count').notNull().default(1),
+	resetAt: timestamp('reset_at', { withTimezone: true }).notNull()
+});
+
 export const appSettings = pgTable('app_settings', {
 	id: serial('id').primaryKey(),
 	key: text('key').unique().notNull(),
