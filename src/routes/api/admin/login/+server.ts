@@ -10,7 +10,7 @@ const SESSION_MAX_AGE = 60 * 60 * 24;
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
 	const clientIp = getClientAddress();
-	const rateCheck = checkRateLimit(`admin-login:${clientIp}`);
+	const rateCheck = await checkRateLimit(`admin-login:${clientIp}`);
 	if (!rateCheck.allowed) {
 		return json(
 			{ error: 'Too many login attempts. Try again later.' },
@@ -48,7 +48,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 		return json({ error: 'Invalid credentials' }, { status: 401 });
 	}
 
-	clearRateLimit(`admin-login:${clientIp}`);
+	await clearRateLimit(`admin-login:${clientIp}`);
 
 	const token = generateSessionToken();
 	const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000);
