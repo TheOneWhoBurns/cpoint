@@ -9,20 +9,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to EC2
+      - name: Deploy to EC2 (via EIP)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          command_timeout: 10m
           script: |
+            set -e
             cd /opt/rental-system
-            git pull origin rental-system
-            npm ci
+
+            echo "=== Pulling latest code ==="
+            git fetch origin
+            git checkout rental-system
+            git reset --hard origin/rental-system
+
+            echo "=== Installing dependencies ==="
+            npm ci --omit=dev
+
+            echo "=== Building ==="
             npm run build
+
+            echo "=== Applying database migrations ==="
             npm run db:push
+
+            echo "=== Restarting app ==="
             sudo systemctl restart rental-app
-            sleep 5
+
+            echo "=== Waiting for health check ==="
+            for i in $(seq 1 6); do
+              sleep 5
+              if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+                echo "Deployment successful - app is healthy"
+                exit 0
+              fi
+              echo "Waiting... ($i/6)"
+            done
+
+            echo "WARNING: Health check not passing yet, but app may still be starting"
             curl -f http://localhost:3000/health
 
       - name: Verify deployment
@@ -31,4 +56,4 @@ jobs:
 
       - name: Notify failure
         if: failure()
-        run: echo "Deployment failed - check logs and consider rollback"
+        run: echo "::error::Deployment failed - check EC2 logs. SSH to instance and run 'journalctl -u rental-app -n 50'"

@@ -23,3 +23,11 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 screenshots/
 test-results/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/terraform.tfvars
+terraform/lambda_function.zip
+terraform/.terraform.lock.hcl
